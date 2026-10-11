@@ -1,0 +1,19 @@
+{
+  "name": "ilmiy-yuksalish",
+  "version": "1.0.0",
+  "description": "Ilmiy yuksalish \u2014 tadqiqotchilar uchun tavsiyaviy platforma (Scopus, OAK, impakt faktor, konferensiyalar, shaxsiy trayektoriya)",
+  "main": "server.js",
+  "engines": {
+    "node": ">=22.5"
+  },
+  "scripts": {
+    "start": "node --no-warnings server.js",
+    "test": "node --no-warnings --test test/*.test.js",
+    "dev:cf": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^4.149.0"
+  }
+}

@@ -1,0 +1,4 @@
+# Mahalliy `npm run dev:cf` uchun: nusxalab .dev.vars deb nomlang
+ADMIN_LOGIN=admin
+ADMIN_PASSWORD=ozgartiring-uzun-parol
+#ANTHROPIC_API_KEY=sk-ant-...

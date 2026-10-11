@@ -1,0 +1,909 @@
+{
+ "milliy": [
+  {
+   "name": "O‘zbekiston iqtisodiy axborotnomasi",
+   "url": "https://evu.uz",
+   "tourism": false
+  },
+  {
+   "name": "Экономическое обозрение",
+   "url": "https://review.uz",
+   "tourism": false
+  },
+  {
+   "name": "Biznes-Эксперт",
+   "url": "https://bdm.uz",
+   "tourism": false
+  },
+  {
+   "name": "O‘zbekiston qishloq xo‘jaligi jurnali",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Xalqaro munosabatlar",
+   "url": "https://uwed.uz",
+   "tourism": false
+  },
+  {
+   "name": "Архитектура. Қурилиш. Дизайн",
+   "url": "https://taqu.edu.uz",
+   "tourism": false
+  },
+  {
+   "name": "Жамият ва бошқарув",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Ижтимоий фикр. Инсон ҳуқуқлари",
+   "url": "https://nhrc.uz",
+   "tourism": false
+  },
+  {
+   "name": "Иқтисодиёт ва инновацион технологиялар",
+   "url": "https://iqtisodiyot.tsue.uz",
+   "tourism": false
+  },
+  {
+   "name": "Иқтисодиёт ва таълим",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Молия",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Молиячи маълумотномаси",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "ЎзР ФА Қорақалпоғистон бўлимининг ахборотномаси",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Agro ILM",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Irrigatsiya va melioratsiya jurnali",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Молия ва банк иши",
+   "url": "https://journal.bfa.uz",
+   "tourism": false
+  },
+  {
+   "name": "Иқтисодиёт ва молия",
+   "url": "https://itm.uz",
+   "tourism": false
+  },
+  {
+   "name": "Халқаро молия ва ҳисоб",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Servis (Samarqand)",
+   "url": "",
+   "tourism": true
+  },
+  {
+   "name": "Хоразм Маъмун академияси Ахборотномаси",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Zamonaviy fan, ta’lim va tarbiyaning dolzarb muammolari",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "ҚҚР ОТМ олимларининг илмий тўплами",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Миллий гвардия Ҳарбий-техника институти ахборотномаси",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Agroiqtisodiyot",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Қарақалпақ давлат университети хабаршысы",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Sustainable Agriculture",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Таълим тизимида ижтимоий-гуманитар фанлар",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "UzBridge",
+   "url": "https://uzbridge.eyuf.uz",
+   "tourism": false
+  },
+  {
+   "name": "Инновацион технологиялар",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Илм-фан ва инновацион ривожланиш",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "ЎзА расмий сайтининг илмий бўлими",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Иқтисодиёт: таҳлиллар ва прогнозлар",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Ўзбекистон статистика ахборотномаси",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Ўзбекистон замини",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Тизимли тадқиқотлар",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Темир йўл транспорти: долзарб масалалар ва инновациялар",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Логистика ва иқтисодиёт",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Наманган муҳандислик-технология институти илмий-техника журнали",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Машинасозлик",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Солиқ ва ҳаёт",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Иқтисодиёт ва туризм",
+   "url": "https://interjournal.uz",
+   "tourism": true
+  },
+  {
+   "name": "Қўқон университети хабарномаси",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Ўзбекистон божхона ахборотномаси",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Scienceproblems.uz",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Ўзбекистонда олий таълим",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Рақамли иқтисодиёт ва ахборот технологиялари",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Яшил иқтисодиёт ва тараққиёт",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Молиявий ва иқтисодий барқарорлик",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Ўзбекистон терговчиси",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Меҳнат иқтисодиёти ва инсон капитали",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Рақамли трансформация ва сунъий интеллект",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Молиявий технологиялар",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Бозор, пул ва кредит",
+   "url": "https://bpk.uz",
+   "tourism": false
+  },
+  {
+   "name": "Янги Ўзбекистон иқтисодиёти",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Инсон капитали ва ижтимоий ривожлантириш — SamDU",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Ўзбекистон суғурта бозори",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Фан ва турмуш",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Фалсафий тадқиқотлар ва ижтимоий фанлар",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Иқтисодий тараққиёт ва таҳлил",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Рақамли иқтисодиёт",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Science and Education in Agriculture",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Ахборот хавфсизлиги ахборотномаси",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "YANGI O‘ZBEKISTON / Правда Востока",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Актуар молия ва бухгалтерия ҳисоби",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Инновацион иқтисодиёт — Qarshi",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Транспорт хабарномаси",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "XXI asr: fan va ta’lim masalalari",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Интеллектуал ва маданий мерос халқаро журнали",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Нордик",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Муҳандислик ва иқтисодиёт",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Шарқ ижтимоий фанлар журнали",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Management, Marketing and Finance",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Тараққиёт",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Marketing",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Илғор иқтисодиёт ва педагогик технологиялар",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Agrobiznes, fan va texnologiyalar",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Innovations in Science and Technologies",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Инсон капитали ва меҳнатни муҳофаза қилиш",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Ma’mun Science",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Innovation Science and Technology",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Молия, пул ва кредит",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "TISU ilmiy tadqiqotlari xabarnomasi — Termiz",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Иқтисод, менежмент ва пул",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Спорт илм-фанининг долзарб муаммолари",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "CAU Journal of Applied Research",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Management and Economics Scientific Research Journal",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Янги иқтисодиёт, педагогика ва технологиялар сари",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Глобал иқтисодиёт ва тараққиёт — Namangan",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Pioneering Studies and Theories",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Фан ва таълимдаги замонавий тадқиқотлар",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "International Journal of Finance and Digitalization",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Молия ва интеллектуал технологиялар",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "ECONOSCITECH INTEGRATION",
+   "url": "",
+   "tourism": false
+  }
+ ],
+ "mdh": [
+  {
+   "name": "Аудит и финансовый анализ",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Аудитор",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Банковское дело",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Вестник Института экономики РАН",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Вестник МГИМО",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Вестник РЭУ им. Плеханова",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Вестник Финансового университета",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Вопросы статистики",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Вопросы экономики",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Деньги и кредит",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Инновации и инвестиции",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Маркетинг в России и за рубежом",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Международный бухгалтерский учет",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Микроэкономика",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Мировая экономика и международные отношения",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Мировая экономика и политика",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Мировое и национальное хозяйство",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Народонаселение",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Наука и практика",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Общество и экономика",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Проблемы современной экономики",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Региональная экономика: теория и практика",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Российский журнал менеджмента",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Российский экономический журнал",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Таможенное дело",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Финансовый менеджмент",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Человеческий капитал и профессиональное образование",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "ЭКО",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Экономика и предпринимательство",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Экономика, статистика и информатика",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Экономико-математические методы",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Экономист",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Экономическая наука современной России",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Экономический анализ: теория и практика",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Экономический бюллетень НИЭИ",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Экономическое возрождение России",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Вестник Российской таможенной академии",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Проблемы рыночной экономики",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Проблемы теории и практики управления",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Региональные проблемы преобразования экономики",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Российский внешнеэкономический вестник",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Экономика Центральной Азии",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Диалог: политика, право, экономика",
+   "url": "",
+   "tourism": false
+  }
+ ],
+ "xorijiy": [
+  {
+   "name": "Applied Mathematical Finance",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Bancaria",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Europe-Asia Studies",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Gestion et Finances Publiques",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "International Journal of Management and Decision Making",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "International Journal of Risk Assessment and Management",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Journal of Economic Theory",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Journal of Marketing for Higher Education",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Scandinavian Journal of Economics",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Eastern Economic Journal",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "The Economic Journal",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "American Journal of Finance and Accounting",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Econometrica",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Farm and Business",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Foundations and Trends in Marketing",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "International Journal of Accounting and Finance",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "International Journal of Decision Support System Technology",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "International Journal of Economics and Accounting",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "International Journal of Environmental Policy and Decision Making",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "International Journal of Financial Markets and Derivatives",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "International Journal of Modelling and Simulation",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Journal of Money, Credit and Banking",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Kyklos",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Risk Management and Insurance Review",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Southern Economic Journal",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "American Economic Review",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Quarterly Journal of Economics",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "World Bank Economic Review",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Asia-Pacific Journal of Accounting and Economics",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "China Finance Review International",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Finance (India)",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "International Economic Journal",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "International Journal of Information Technology & Decision Making",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Journal of Management Value & Ethics",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Journal of Economics and Management (Taiwan)",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Korean Journal of Tourism Research",
+   "url": "",
+   "tourism": true
+  },
+  {
+   "name": "The Indian Journal of Economics",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "The Korea Post",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Meditari Accountancy Research",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Central Asian Journal of Innovations on Tourism Management and Finance",
+   "url": "",
+   "tourism": true
+  },
+  {
+   "name": "Academic Journal of Digital Economics and Stability",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "American Journal of Economics and Business Management",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "American Journal of Social and Humanitarian Research",
+   "url": "",
+   "tourism": false
+  },
+  {
+   "name": "Academia Open",
+   "url": "",
+   "tourism": false
+  }
+ ],
+ "tourism": []
+}
