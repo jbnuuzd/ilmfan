@@ -130,3 +130,43 @@ test('OAK ma’lumotnomasi: talablar, rejim va turizm yo‘nalishi', async (t) =
   const k = (await u('GET', '/knowledge')).data;
   assert.ok(k.sections.length >= 7 && k.links.length > 5);
 });
+
+test('arzon (Scopus’siz) impakt ro‘yxati va jurnal qo‘llanmasi', async (t) => {
+  delete process.env.ANTHROPIC_API_KEY;
+  const db = open(':memory:'); await initSchema(db); await seedAll(db);
+  const server = createApp(db).listen(0);
+  t.after(() => server.close());
+  const u = client(`http://127.0.0.1:${server.address().port}`);
+  await u('POST', '/register', { login: 'lite', password: 'password1', full_name: 'Lite Tadqiqotchi' });
+  await u('PUT', '/profile', { status: 'independent', degree: 'phd', direction_code: '13.00.05', topic: 'Kasb-hunar kollejlarida raqamli ta’lim metodikasi', months: 12, start_month: '2027-01' });
+
+  const lite = (await u('GET', '/journals?category=impact_lite&access=free')).data.items;
+  assert.ok(lite.length >= 5, `kamida 5 ta arzon jurnal, topildi ${lite.length}`);
+  assert.ok(lite.every((j) => j.scopus_status === 'none' && j.access === 'free' && (j.wos === 1 || j.if_source)));
+  // Scopus IF ro'yxatida esa Scopus'dagilar
+  const imp = (await u('GET', '/journals?category=impact&access=free')).data.items;
+  assert.ok(imp.every((j) => j.scopus_status === 'active' || j.oak_status === 'active' || j.wos === 1));
+
+  // Muqobil IF manbasi bor, lekin arzon pullik jurnal: ro'yxatga kiradi va OAK ogohlantirishi chiqadi
+  await db.prepare("INSERT INTO journals(name,publisher,access,apc_usd,subjects,impact_factor,if_source,acceptance) VALUES('Alt IF Test Journal','X','paid',300,'education,pedagogy',1.2,'alt',5)").run();
+  const paid = (await u('GET', '/journals?category=impact_lite&access=paid')).data.items;
+  const alt = paid.find((j) => j.name === 'Alt IF Test Journal');
+  assert.ok(alt, 'arzon pullik jurnal ro‘yxatda');
+  const g = (await u('GET', `/journals/${alt.id}/guide?category=impact_lite`)).data;
+  assert.ok(g.guide.warnings.some((w) => /OAK/.test(w) && /tan olinmaydi/.test(w)));
+
+  // Batafsil qo'llanma
+  const sc = (await u('GET', '/journals?category=scopus&access=paid')).data.items[0];
+  const guide = (await u('GET', `/journals/${sc.id}/guide?category=scopus`)).data.guide;
+  assert.ok(guide.steps.length >= 12 && guide.steps.every((s) => s.title && s.detail && s.duration));
+  assert.ok(guide.preparation.length >= 3 && guide.overview.length >= 6 && guide.links.length >= 2);
+  assert.match(guide.system, /\S/);
+  const oak = (await u('GET', '/journals?category=oak&access=free')).data.items[0];
+  const og = (await u('GET', `/journals/${oak.id}/guide?category=oak`)).data.guide;
+  assert.ok(og.preparation.some((s) => /OAK/.test(s.title)) && og.steps.some((s) => /Chop etilishi/.test(s.title)));
+  const conf = (await u('GET', '/journals?category=conference&access=paid')).data.items[0];
+  const cg = (await u('GET', `/journals/${conf.id}/guide?category=conference`)).data.guide;
+  assert.ok(cg.steps.some((s) => /Taqdimot/.test(s.title)));
+  assert.equal((await u('POST', `/journals/${sc.id}/advice`, {})).status, 400); // AI kaliti yo'q
+  assert.equal((await u('GET', '/journals/999999/guide')).status, 404);
+});

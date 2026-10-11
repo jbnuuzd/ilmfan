@@ -48,7 +48,9 @@ const directions = [
 ];
 
 // [name, publisher, country, since, access, apc, scopus, Q, oak, IF, wos, subjects, accept, weeks, url, desc]
-const J = (o) => Object.assign({ kind: 'journal', issn: '', apc_usd: null, impact_factor: null, wos: 0, scopus_status: 'none', quartile: '', oak_status: 'none', acceptance: 3, review_weeks: null, official_url: '', scopus_url: '', oak_url: '', description: '', since_year: null, verified: 0 }, o);
+const J = (o) => Object.assign({ kind: 'journal', issn: '', apc_usd: null, impact_factor: null, wos: 0, scopus_status: 'none', quartile: '', oak_status: 'none', acceptance: 3, review_weeks: null, official_url: '', scopus_url: '', oak_url: '', description: '', since_year: null, verified: 0, if_source: '' }, o);
+// JCR impakt faktori bor jurnallarga manba belgisi
+const withSource = (j) => (j.impact_factor != null && !j.if_source ? { ...j, if_source: 'jcr' } : j);
 const sc = (name) => `https://www.scimagojr.com/journalsearch.php?q=${encodeURIComponent(name)}`;
 const S = (name, publisher, country, since, access, q, subjects, extra = {}) =>
   J({ name, publisher, country, since_year: since, access, scopus_status: 'active', quartile: q, subjects, scopus_url: sc(name), ...extra });
@@ -151,6 +153,24 @@ const journals = [
   S('Tourism and Hospitality', 'MDPI', 'Shveytsariya', 2020, 'paid', 'Q2', 'tourism,management', { apc_usd: 1400, acceptance: 4, review_weeks: 5, official_url: 'https://www.mdpi.com/journal/tourhosp' }),
   S('Administrative Sciences', 'MDPI', 'Shveytsariya', 2011, 'paid', 'Q2', 'management,economics,tourism', { apc_usd: 1800, acceptance: 4, review_weeks: 5, official_url: 'https://www.mdpi.com/journal/admsci' }),
 
+
+  // ---------- ARZON, Scopus'da INDEKSLANMAGAN nashrlar (Web of Science ESCI va h.k.) ----------
+  // Diqqat: indekslanish holati tez o'zgaradi — har birini jurnal saytida va Web of Science Master Journal List'da tekshiring.
+  ...[
+    ['Participatory Educational Research', 'Education Research Association', 'Turkiya', 2014, 'education,pedagogy,highered'],
+    ['Journal of Social Studies Education Research', 'Journal of Social Studies Education Research', 'Turkiya', 2010, 'education,pedagogy,social'],
+    ['International Journal of Contemporary Educational Research', 'Contemporary Educational Research Association', 'Turkiya', 2014, 'education,pedagogy,highered'],
+    ['Journal of Pedagogical Research', 'Ztek Publishing', 'Turkiya', 2017, 'education,pedagogy,vocational'],
+    ['International Online Journal of Education and Teaching', 'IOJET', 'Turkiya', 2014, 'education,pedagogy,edtech'],
+    ['Journal of Educational Technology and Online Learning', 'JETOL', 'Turkiya', 2018, 'edtech,education,highered'],
+    ['Journal of Teacher Education and Educators', 'Journal of Teacher Education and Educators', 'Turkiya', 2012, 'education,pedagogy'],
+    ['Journal of Eastern European and Central Asian Research', 'Kyrgyz-Turkish Manas University', "Qirg'iziston", 2014, 'economics,management,social,tourism,education'],
+  ].map(([name, publisher, country, since_year, subjects]) => J({
+    name, publisher, country, since_year, subjects, access: 'free', apc_usd: 0, scopus_status: 'none', wos: 1, if_source: 'esci', acceptance: 5, review_weeks: 6,
+    scopus_url: sc(name),
+    description: "Mualliflardan to'lov talab qilinmaydigan, Scopus'da indekslanmagan (ESCI) nashr. Maqola OAK talabi uchun hisoblanishi uchun Web of Science'dagi faol maqomini tekshiring; JCR impakt-faktori bo'lmasligi mumkin.",
+  })),
+
   // ---------- OAK ro'yxatidagi milliy nashrlar (NAMUNA — oak.uz bilan sinxronlang) ----------
   ...[
     ['Pedagogik mahorat', "Buxoro davlat universiteti", 'free', 'education,pedagogy,vocational'],
@@ -203,6 +223,7 @@ const oakEconomics = [
     : `OAK ro'yxatidagi (08.00.00) ${grp === 'mdh' ? 'MDH' : 'xorijiy'} nashr. Xorijiy maqola sifatida hisoblanishi uchun jurnalning Scopus/WoS'da FAOL indekslanganini alohida tekshiring.`,
 }));
 journals.push(...oakEconomics);
+journals.forEach((j, i) => { journals[i] = withSource(j); });
 
 const REQ_SRC = 'https://lex.uz/uz/docs/3244217';
 const requirements = [
@@ -262,7 +283,7 @@ const quotes = [
   ['Santyago Ramon-i-Kaxal', "Miyaning qaysi sohasini rivojlantirmoqchi bo‘lsangiz, o‘sha sohada qat’iyat bilan mashq qiling.", "Ramon-i-Kaxal asarlaridagi fikr mazmuni"],
 ];
 
-const SEED_VERSION = 2;
+const SEED_VERSION = 3;
 
 const insertStmt = (table, obj, ignore = true) => {
   const keys = Object.keys(obj);
@@ -290,6 +311,7 @@ async function seedAll(db) {
     for (const r of requirements) stmts.push(insertStmt('requirements', r));
     stmts.push(["DELETE FROM journals WHERE verified=0 AND name IN ('Iqtisodiyot va ta’lim','Iqtisodiyot va innovatsion texnologiyalar','Moliya va bank ishi')"]);
   }
+  if (version < 3) stmts.push(["UPDATE journals SET if_source='jcr' WHERE impact_factor IS NOT NULL AND if_source=''"]);
   for (const [author, text, note] of quotes) stmts.push(insertStmt('quotes', { author, text, note }));
   await batchChunked(db, stmts, 60);
   await setSetting(db, 'seed_version', SEED_VERSION);

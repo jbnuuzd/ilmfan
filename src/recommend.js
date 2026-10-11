@@ -1,7 +1,8 @@
 'use strict';
 const ai = require('./ai');
 
-const CATEGORIES = ['scopus', 'oak', 'impact', 'conference'];
+const CATEGORIES = ['scopus', 'oak', 'impact', 'impact_lite', 'conference'];
+const CHEAP_USD = 600; // «arzon» chegarasi: nashr to'lovi shundan oshmasin
 const QRANK = { Q1: 1, Q2: 2, Q3: 3, Q4: 4 };
 const QWEIGHT = { Q1: 4, Q2: 3, Q3: 2, Q4: 1 };
 
@@ -26,7 +27,9 @@ function topicTags(topic) {
   return hits;
 }
 
-function scoreJournal(j, direction, topic) {
+const isCheap = (j) => j.access === 'free' || (j.apc_usd != null && j.apc_usd <= CHEAP_USD);
+
+function scoreJournal(j, direction, topic, category) {
   const dTags = new Set(tagsOf(direction?.tags));
   const jTags = tagsOf(j.subjects);
   const tagHits = jTags.filter((t) => dTags.has(t));
@@ -37,8 +40,10 @@ function scoreJournal(j, direction, topic) {
   const rel = Math.min(1, (tagHits.length + primary + kwHits.length * 0.7) / 3);
   const prestige = j.scopus_status === 'active' ? (QWEIGHT[j.quartile] || 1) / 4 : (j.impact_factor ? Math.min(1, j.impact_factor / 8) : 0.4);
   const accept = (j.acceptance || 3) / 5;
-  const match = Math.round(100 * (0.5 * rel + 0.25 * prestige + 0.25 * accept));
-  return { score: rel === 0 ? 0 : 0.5 * rel + 0.25 * prestige + 0.25 * accept, matchScore: match, tagHits, kwHits };
+  // arzon ro'yxatda narx ham hisobga olinadi: bepul > arzon pullik
+  const cheap = category === 'impact_lite' ? (j.access === 'free' ? 1 : 1 - Math.min(1, (j.apc_usd || CHEAP_USD) / CHEAP_USD)) : 0;
+  const base = category === 'impact_lite' ? 0.4 * rel + 0.2 * prestige + 0.2 * accept + 0.2 * cheap : 0.5 * rel + 0.25 * prestige + 0.25 * accept;
+  return { score: rel === 0 ? 0 : base, matchScore: Math.round(100 * base), tagHits, kwHits };
 }
 
 function matchesCategory(j, category) {
@@ -47,6 +52,8 @@ function matchesCategory(j, category) {
   switch (category) {
     case 'scopus': return j.scopus_status === 'active';
     case 'oak': return j.oak_status === 'active';
+    // Arzon va Scopus'da INDEKSLANMAGAN: Web of Science (ESCI/JCR) yoki muqobil IF manbasi bor; bepul yoki nashr to'lovi ≤ CHEAP_USD
+    case 'impact_lite': return j.scopus_status === 'none' && (j.wos === 1 || !!j.if_source) && isCheap(j);
     case 'impact': return (j.impact_factor != null || j.wos === 1) && (j.scopus_status === 'active' || j.oak_status === 'active' || j.wos === 1);
     default: throw new Error('Noto‘g‘ri kategoriya');
   }
@@ -54,7 +61,7 @@ function matchesCategory(j, category) {
 
 function candidatesFrom(journals, category, access, direction, topic, excludeIds = []) {
   return journals.filter((j) => j.access === access && matchesCategory(j, category) && !excludeIds.includes(j.id))
-    .map((j) => ({ ...j, ...scoreJournal(j, direction, topic) }))
+    .map((j) => ({ ...j, ...scoreJournal(j, direction, topic, category) }))
     .filter((j) => j.score > 0)
     .sort((a, b) => b.score - a.score || (a.quartile || 'Q9').localeCompare(b.quartile || 'Q9'));
 }
@@ -119,7 +126,7 @@ async function refresh(db, userId, category, access, { syncFeeds } = {}) {
   // oldingi refreshdagi "yangi"/"ko'tarilgan" belgilari yangi tekshiruvda tozalanadi
   await db.prepare("UPDATE user_journals SET note='' WHERE user_id=? AND category=? AND access=? AND flag=''").run(userId, category, access);
   const rows = await db.prepare(`
-    SELECT uj.*, j.name, j.quartile, j.scopus_status, j.oak_status, j.kind FROM user_journals uj
+    SELECT uj.*, j.name, j.quartile, j.scopus_status, j.oak_status, j.kind, j.wos, j.if_source, j.access AS j_access, j.apc_usd FROM user_journals uj
     JOIN journals j ON j.id=uj.journal_id WHERE uj.user_id=? AND uj.category=? AND uj.access=? AND uj.flag=''`).all(userId, category, access);
 
   const flagged = [], upgraded = [], stmts = [];
@@ -128,6 +135,10 @@ async function refresh(db, userId, category, access, { syncFeeds } = {}) {
     let flag = '', reason = '';
     if ((category === 'scopus' || category === 'impact') && r.scopus_status !== 'active' && r.scopus_status !== 'none') {
       flag = 'delisted'; reason = "Jurnal Scopus bazasidan chiqib ketgan (yoki faolligi to'xtatilgan)";
+    }
+    if (category === 'impact_lite') {
+      if (r.wos !== 1 && !r.if_source) { flag = 'delisted'; reason = "Jurnal Web of Science'dagi (ESCI/JCR) maqomini yo'qotgan"; }
+      else if (r.j_access !== 'free' && !(r.apc_usd != null && r.apc_usd <= CHEAP_USD)) { flag = 'downgraded'; reason = "Nashr to'lovi «arzon» chegarasidan (" + CHEAP_USD + " USD) oshgan"; }
     }
     if (!flag && category === 'oak' && r.oak_status !== 'active') {
       flag = 'removed'; reason = "Jurnal OAK tomonidan e'tirof etilgan ro'yxatdan chiqarilgan";
@@ -170,4 +181,4 @@ const changeStmt = (journalId, field, oldV, newV, source) =>
   ['INSERT INTO journal_changes(journal_id,field,old_value,new_value,source) VALUES(?,?,?,?,?)', journalId, field, oldV == null ? '' : String(oldV), newV == null ? '' : String(newV), source];
 const logChange = (db, ...args) => db.batch([changeStmt(...args)]);
 
-module.exports = { CATEGORIES, scoreJournal, candidates, candidatesFrom, matchesCategory, ensureRecommendations, list, refresh, logChange, changeStmt, getProfileCtx, COUNT };
+module.exports = { CHEAP_USD, CATEGORIES, scoreJournal, candidates, candidatesFrom, matchesCategory, ensureRecommendations, list, refresh, logChange, changeStmt, getProfileCtx, COUNT };

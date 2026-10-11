@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS journals (
   quartile TEXT NOT NULL DEFAULT '',            -- Q1..Q4
   oak_status TEXT NOT NULL DEFAULT 'none',      -- none | active | removed
   impact_factor REAL,
+  if_source TEXT NOT NULL DEFAULT '',           -- jcr (Clarivate JCR) | esci (WoS ESCI, IF yo'q) | alt (muqobil 'impakt faktor' xizmatlari)
   wos INTEGER NOT NULL DEFAULT 0,
   subjects TEXT NOT NULL DEFAULT '',
   acceptance INTEGER NOT NULL DEFAULT 3,        -- 1..5, yuqori = qabul ehtimoli yuqori
@@ -73,7 +74,7 @@ CREATE TABLE IF NOT EXISTS user_journals (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   journal_id INTEGER NOT NULL REFERENCES journals(id) ON DELETE CASCADE,
-  category TEXT NOT NULL,                       -- scopus | oak | impact | conference
+  category TEXT NOT NULL,                       -- scopus | oak | impact | impact_lite | conference
   access TEXT NOT NULL,                         -- free | paid
   flag TEXT NOT NULL DEFAULT '',                -- '' | downgraded | delisted | removed
   flag_reason TEXT NOT NULL DEFAULT '',
@@ -127,6 +128,13 @@ CREATE TABLE IF NOT EXISTS quotes (
   text TEXT NOT NULL,
   note TEXT NOT NULL DEFAULT ''
 );
+CREATE TABLE IF NOT EXISTS journal_advice (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  journal_id INTEGER NOT NULL REFERENCES journals(id) ON DELETE CASCADE,
+  text TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, journal_id)
+);
 CREATE TABLE IF NOT EXISTS motivations (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   day TEXT NOT NULL,
@@ -155,6 +163,8 @@ function schemaStatements() {
 async function initSchema(db) {
   await db.batch(schemaStatements().map((sql) => [sql]));
   const cols = (await db.prepare('PRAGMA table_info(doc_templates)').all()).map((c) => c.name);
+  const jcols = (await db.prepare('PRAGMA table_info(journals)').all()).map((c) => c.name);
+  if (!jcols.includes('if_source')) await db.prepare("ALTER TABLE journals ADD COLUMN if_source TEXT NOT NULL DEFAULT ''").run();
   if (!cols.includes('cancelled_from')) await db.prepare("ALTER TABLE doc_templates ADD COLUMN cancelled_from TEXT NOT NULL DEFAULT ''").run();
 }
 

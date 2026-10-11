@@ -50,3 +50,9 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{padding:8px 10px;
 .modal{position:fixed;inset:0;background:#0008;display:flex;align-items:flex-start;justify-content:center;padding:30px 12px;overflow:auto;z-index:20}.modal .card{max-width:760px;width:100%}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}@media(max-width:600px){.row2{grid-template-columns:1fr}}
 .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;z-index:30;max-width:90vw}
+
+.jcard.clickable{cursor:pointer;transition:box-shadow .15s,border-color .15s}.jcard.clickable:hover,.jcard.clickable:focus-visible{box-shadow:0 2px 14px #0002;border-color:var(--brand);outline:0}
+.modal .card.detail{max-width:900px}
+.subcard{background:var(--bg);border-radius:10px;padding:12px 14px;margin:8px 0}.subcard ul{margin:6px 0 0;padding-left:20px}.subcard li{margin:4px 0}
+.stepper{counter-reset:s;list-style:none;padding:0;margin:10px 0}.stepper li{counter-increment:s;position:relative;padding:8px 0 12px 46px;border-left:2px solid var(--line);margin-left:15px}
+.stepper li::before{content:counter(s);position:absolute;left:-16px;top:6px;width:30px;height:30px;border-radius:50%;background:var(--brand);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center}

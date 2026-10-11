@@ -66,6 +66,10 @@ oldinga, uzoq ko'rib chiqiladigan Scopus maqolalari o'rtaga, qo'llanma/monografi
 **Scopus / OAK / Impakt faktor / Konferensiyalar** — har biri Bepul va Pullik, har bir yo'nalish uchun 10 tagacha tavsiya:
 kvartil, boshlangan yil, rasmiy sayt, indekslanganlik isboti havolasi, AI moslik tahlili.
 
+**Jurnal batafsil oynasi:** istalgan tavsiya etilgan jurnal (yoki konferensiya) ustiga bosilganda: to'liq ma'lumot va indeks isboti havolalari, maqolani tayyorlash/rasmiylashtirish tavsiyalari (OAK, Scopus/WoS, arzon nashrlar uchun alohida bo'limlar) va yuborishning bosqichma-bosqich yo'riqnomasi (14 bosqich: indeksni tekshirish → yuborish tizimi → peer review → revision → to'lov → chop etish → nashrdan keyingi hujjatlar). `ANTHROPIC_API_KEY` bo'lsa, foydalanuvchi mavzusiga moslashtirilgan AI maslahat ham olish mumkin.
+
+**Arzon impakt (Scopus'siz):** Scopus'da indekslanmagan, Web of Science (ESCI/JCR) yoki muqobil IF manbasi bor, bepul yoki nashr to'lovi ≤ 600 USD bo'lgan nashrlar. OAK muqobil «impakt faktor» xizmatlarini (SJIF, GIF va h.k.) tan olmaydi — bunday jurnallar qizil belgi va ogohlantirish bilan ko'rsatiladi.
+
 **Refresh:** kvartili pasaygan, Scopus yoki OAK ro'yxatidan chiqqan jurnal **o'chirilmaydi** — qizil bilan belgilanadi,
 o'rniga yangi jurnal tavsiya etiladi (faol tavsiyalar yana 10 ta). Kvartili ko'tarilganlar yashil belgilanadi.
 

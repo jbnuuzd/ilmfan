@@ -8,6 +8,7 @@ const ai = require('./ai');
 const rec = require('./recommend');
 const feeds = require('./feeds');
 const planner = require('./planner');
+const { buildGuide } = require('./guide');
 const { knowledge } = require('./knowledge');
 
 class HttpError extends Error { constructor(status, message) { super(message); this.status = status; } }
@@ -15,7 +16,7 @@ const bad = (m) => new HttpError(400, m);
 
 // ---- Admin CRUD konfiguratsiyasi ----
 const ENTITIES = {
-  journals: { table: 'journals', order: 'name', cols: ['name', 'kind', 'issn', 'publisher', 'country', 'since_year', 'access', 'apc_usd', 'scopus_status', 'quartile', 'oak_status', 'impact_factor', 'wos', 'subjects', 'acceptance', 'review_weeks', 'official_url', 'scopus_url', 'oak_url', 'description', 'verified'], track: ['scopus_status', 'quartile', 'oak_status', 'impact_factor', 'access'] },
+  journals: { table: 'journals', order: 'name', cols: ['name', 'kind', 'issn', 'publisher', 'country', 'since_year', 'access', 'apc_usd', 'scopus_status', 'quartile', 'oak_status', 'impact_factor', 'if_source', 'wos', 'subjects', 'acceptance', 'review_weeks', 'official_url', 'scopus_url', 'oak_url', 'description', 'verified'], track: ['scopus_status', 'quartile', 'oak_status', 'impact_factor', 'access'] },
   directions: { table: 'directions', pk: 'code', order: 'code', cols: ['code', 'name', 'field_group', 'tags', 'hints'] },
   requirements: { table: 'requirements', order: 'degree, id', cols: ['degree', 'kind', 'title', 'min_count', 'description', 'source_url', 'verified'] },
   doc_templates: { table: 'doc_templates', order: 'id', cols: ['key', 'category', 'title', 'description', 'phase', 'required', 'directions', 'cancelled_from'] },
@@ -216,6 +217,32 @@ function createHandler(db) {
     return res;
   });
 
+  // Jurnal bo'yicha batafsil qo'llanma: ma'lumot + maqola tayyorlash tavsiyalari + yuborish bosqichlari
+  route('GET', '/api/journals/(\\d+)/guide', 'user', async (req, body, ctx) => {
+    const j = await db.prepare('SELECT * FROM journals WHERE id=?').get(Number(ctx.params[0]));
+    if (!j) throw new HttpError(404, 'Jurnal topilmadi');
+    const category = rec.CATEGORIES.includes(ctx.query.category) ? ctx.query.category : (j.kind === 'conference' ? 'conference' : 'scopus');
+    const { profile, direction } = await rec.getProfileCtx(db, ctx.user.id);
+    const fit = await db.prepare('SELECT fit_score, fit_text, flag, flag_reason FROM user_journals WHERE user_id=? AND journal_id=? AND category=?').get(ctx.user.id, j.id, category);
+    const advice = await db.prepare('SELECT text FROM journal_advice WHERE user_id=? AND journal_id=?').get(ctx.user.id, j.id);
+    return { journal: j, category, guide: buildGuide(j, { category, direction, fit }), flag: fit?.flag ? fit.flag_reason : null, advice: advice?.text || null, aiEnabled: ai.enabled(), hasProfile: !!profile };
+  });
+
+  // AI: foydalanuvchi mavzusiga moslashtirilgan jurnal bo'yicha maslahat (keshlanadi)
+  route('POST', '/api/journals/(\\d+)/advice', 'user', async (req, body, ctx) => {
+    if (!ai.enabled()) throw bad('AI uchun ANTHROPIC_API_KEY o‘rnatilmagan');
+    const j = await db.prepare('SELECT * FROM journals WHERE id=?').get(Number(ctx.params[0]));
+    if (!j) throw new HttpError(404, 'Jurnal topilmadi');
+    const { profile, direction } = await rec.getProfileCtx(db, ctx.user.id);
+    if (!profile) throw bad('Avval profilni to‘ldiring');
+    const text = await ai.ask("Siz tajribali ilmiy maslahatchisiz. Faqat o'zbek tilida, aniq va amaliy yozing. Bilmagan faktlarni to'qimang; jurnalning rasmiy 'Guide for Authors' hujjati ustuvorligini eslatib o'ting.",
+      `Tadqiqotchi yo'nalishi: ${direction?.code} ${direction?.name}. Mavzu: ${profile.topic}. Jurnal: ${j.name} (${j.publisher}; kvartil: ${j.quartile || 'yo\'q'}; teglar: ${j.subjects}). ` +
+      `Shu jurnalga maqola yuborish uchun: 1) mavzuni jurnal doirasiga qanday moslashtirish, 2) maqolaning aniq sarlavha/tuzilma g'oyasi, 3) rad etilish xavflari va ularni kamaytirish — 6-8 qisqa band bilan yozing.`, { maxTokens: 700, timeoutMs: 40000 });
+    if (!text) throw new HttpError(502, 'AI hozir javob bera olmadi, keyinroq urinib ko‘ring');
+    await db.prepare('INSERT OR REPLACE INTO journal_advice(user_id,journal_id,text) VALUES(?,?,?)').run(ctx.user.id, j.id, text);
+    return { advice: text };
+  });
+
   route('GET', '/api/journals/history', 'user', async (req, body, ctx) => ({
     log: await db.prepare('SELECT category, access, summary, created_at FROM refresh_log WHERE user_id=? ORDER BY id DESC LIMIT 30').all(ctx.user.id),
   }));
@@ -223,7 +250,7 @@ function createHandler(db) {
   // ---------- Admin ----------
   async function coverage() {
     // har bir yo'nalish uchun har bir toifa/kirish turida nechta nomzod jurnal bor (kamida 10 ta bo'lishi kerak) — bitta so'rov bilan
-    const [dirs, journals] = await Promise.all([db.prepare('SELECT * FROM directions ORDER BY code').all(), db.prepare('SELECT id,kind,access,scopus_status,oak_status,impact_factor,wos,subjects,quartile,acceptance FROM journals').all()]);
+    const [dirs, journals] = await Promise.all([db.prepare('SELECT * FROM directions ORDER BY code').all(), db.prepare('SELECT id,kind,access,scopus_status,oak_status,impact_factor,if_source,apc_usd,wos,subjects,quartile,acceptance FROM journals').all()]);
     return dirs.map((d) => {
       const row = { code: d.code, name: d.name };
       for (const c of rec.CATEGORIES) for (const a of ['free', 'paid']) row[`${c}_${a}`] = rec.candidatesFrom(journals, c, a, d, '').length;
