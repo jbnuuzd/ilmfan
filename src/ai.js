@@ -2,14 +2,14 @@
 /*
  * Sun'iy intellekt qatlami — uch provayder: Google Gemini, OpenAI (ChatGPT) va Anthropic (Claude).
  * Provayder kalitdan avtomatik aniqlanadi (bir nechta kalit bo'lsa, ustuvorlik: Gemini > OpenAI > Claude):
- *   GEMINI_API_KEY (yoki GOOGLE_API_KEY)  -> Google Gemini (standart model: gemini-2.5-flash)
+ *   GEMINI_API_KEY (yoki GOOGLE_API_KEY)  -> Google Gemini (standart model: gemini-3.8-flash)
  *   OPENAI_API_KEY                         -> OpenAI (standart model: gpt-4o-mini)
  *   ANTHROPIC_API_KEY                      -> Anthropic (standart model: claude-sonnet-5-5)
  *   AI_API_KEY yoki API_KEY                -> "AIza" bilan boshlansa Gemini, "sk-ant-" bilan Anthropic, aks holda OpenAI
  * Majburan tanlash: AI_PROVIDER=gemini|openai|anthropic. Modelni almashtirish: AI_MODEL.
  * Kalit bo'lmasa — qoidaga asoslangan (offline) zaxira matnlar qaytariladi, platforma har holda ishlaydi.
  */
-const DEFAULT_MODEL = { gemini: 'gemini-2.5-flash', openai: 'gpt-4o-mini', anthropic: 'claude-sonnet-5-5' };
+const DEFAULT_MODEL = { gemini: 'gemini-3.8-flash', openai: 'gpt-4o-mini', anthropic: 'claude-sonnet-5-5' };
 const PROVIDER_LABEL = { gemini: 'Google Gemini', openai: 'OpenAI', anthropic: 'Claude' };
 
 function config(env = process.env) {
@@ -32,21 +32,45 @@ const info = () => { const c = config(); return { enabled: !!c.key, provider: c.
 let lastError = null;
 const lastAiError = () => lastError;
 
+
+// Gemini: model nomlari tez eskiradi. Standart model "yangi foydalanuvchilar uchun mavjud emas" (404) desa,
+// zaxira modellarga o'tamiz va ishlagan modelni eslab qolamiz. Thinking sozlamasini qabul qilmasa — usiz qayta urinamiz.
+const GEMINI_FALLBACKS = ['gemini-flash-latest'];
+const geminiWorking = new Map(); // sozlangan model -> ishlagan model
+
+async function geminiRound(c, system, user, maxTokens, signal) {
+  const models = [...new Set([geminiWorking.get(c.model) || c.model, ...GEMINI_FALLBACKS])];
+  let last;
+  for (const model of models) {
+    for (const thinking of /flash/i.test(model) ? [true, false] : [false]) {
+      // "thinking" tokenlari chiqish limitidan ayrilmasligi uchun flash modellarda o'chiriladi
+      const generationConfig = { maxOutputTokens: Math.max(maxTokens * 2, 512) };
+      if (thinking) generationConfig.thinkingConfig = { thinkingBudget: 0 };
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+        method: 'POST', signal,
+        headers: { 'content-type': 'application/json', 'x-goog-api-key': c.key },
+        body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents: [{ role: 'user', parts: [{ text: user }] }], generationConfig }),
+      });
+      const data = await res.json().catch(() => ({}));
+      last = { res, data };
+      if (res.ok) { if (model !== c.model) console.warn(`[AI] ${c.model} o'rniga ${model} ishlatilmoqda — AI_MODEL ni yangilang`); geminiWorking.set(c.model, model); return last; }
+      const msg = String(data?.error?.message || '');
+      if (res.status === 400 && thinking && /thinking/i.test(msg)) continue; // thinkingConfig'siz qayta urinish
+      if (res.status === 404) break; // model mavjud emas -> keyingi zaxira model
+      return last;
+    }
+  }
+  return last;
+}
+
 /** Provayderga so'rov yuboradi; xato bo'lsa Error tashlaydi (kalit hech qachon xabarga qo'shilmaydi) */
 async function callRaw(system, user, { maxTokens, timeoutMs }) {
   const c = config();
   if (!c.key) throw new Error('AI kaliti sozlanmagan (GEMINI_API_KEY)');
   const signal = AbortSignal.timeout(timeoutMs);
-  let res;
+  let res, data;
   if (c.provider === 'gemini') {
-    // "thinking" tokenlari chiqish limitidan ayrilmasligi uchun flash modellarda o'chiriladi
-    const generationConfig = { maxOutputTokens: Math.max(maxTokens * 2, 512) };
-    if (/flash/i.test(c.model)) generationConfig.thinkingConfig = { thinkingBudget: 0 };
-    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(c.model)}:generateContent`, {
-      method: 'POST', signal,
-      headers: { 'content-type': 'application/json', 'x-goog-api-key': c.key },
-      body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents: [{ role: 'user', parts: [{ text: user }] }], generationConfig }),
-    });
+    ({ res, data } = await geminiRound(c, system, user, maxTokens, signal));
   } else if (c.provider === 'openai') {
     res = await fetch(`${c.baseUrl}/chat/completions`, {
       method: 'POST', signal,
@@ -60,7 +84,7 @@ async function callRaw(system, user, { maxTokens, timeoutMs }) {
       body: JSON.stringify({ model: c.model, max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }] }),
     });
   }
-  const data = await res.json().catch(() => ({}));
+  if (!data) data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = String(data?.error?.message || data?.error || `HTTP ${res.status}`).replace(/(sk-|AIza)[A-Za-z0-9_-]{8,}/g, '$1***').slice(0, 300);
     throw new Error(`${c.provider} (${res.status}): ${msg}`);

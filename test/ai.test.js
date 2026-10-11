@@ -75,11 +75,11 @@ test('OpenAI orqali motivatsiya va jurnal moslik tahlili (JSON ```blok``` ichida
 
 test('Gemini: aniqlash, so‘rov formati va javob', async () => {
   await withEnv({ GEMINI_API_KEY: 'AIzaSyFAKEKEY1234567890' }, async () => {
-    assert.deepEqual([ai.info().provider, ai.info().model, ai.info().label], ['gemini', 'gemini-2.5-flash', 'Google Gemini']);
+    assert.deepEqual([ai.info().provider, ai.info().model, ai.info().label], ['gemini', 'gemini-3.8-flash', 'Google Gemini']);
     let seen;
     global.fetch = async (url, init) => { seen = { url, h: init.headers, body: JSON.parse(init.body) }; return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'Salom ' }, { text: 'dunyo' }] } }] }), { status: 200 }); };
     assert.equal(await ai.ask('tizim', 'savol', { maxTokens: 300 }), 'Salom dunyo');
-    assert.equal(seen.url, 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent');
+    assert.equal(seen.url, 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent');
     assert.equal(seen.h['x-goog-api-key'], 'AIzaSyFAKEKEY1234567890');
     assert.equal(seen.body.systemInstruction.parts[0].text, 'tizim');
     assert.equal(seen.body.contents[0].parts[0].text, 'savol');
@@ -108,5 +108,24 @@ test('Gemini xatolari: kalit yashiriladi, bo‘sh javob xato sifatida', async ()
     assert.match(ai.lastAiError(), /bo'sh javob/);
     global.fetch = async () => new Response(JSON.stringify({ error: { message: 'Quota exceeded' } }), { status: 429 });
     assert.match((await ai.test()).error, /429/);
+  });
+});
+
+test('Gemini: eski model 404 bersa zaxira modelga o‘tadi va eslab qoladi; thinking rad etilsa usiz qayta uriniladi', async () => {
+  await withEnv({ GEMINI_API_KEY: 'AIzaX', AI_MODEL: 'gemini-2.5-flash' }, async () => {
+    const calls = [];
+    global.fetch = async (url, init) => {
+      const model = /models\/([^:]+):/.exec(url)[1];
+      const body = JSON.parse(init.body);
+      calls.push([model, !!body.generationConfig.thinkingConfig]);
+      if (model === 'gemini-2.5-flash') return new Response(JSON.stringify({ error: { message: 'This model is no longer available to new users' } }), { status: 404 });
+      if (body.generationConfig.thinkingConfig) return new Response(JSON.stringify({ error: { message: 'Unknown field thinkingBudget; use thinking_level' } }), { status: 400 });
+      return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'Javob' }] } }] }), { status: 200 });
+    };
+    assert.equal(await ai.ask('s', 'u'), 'Javob');
+    assert.deepEqual(calls, [['gemini-2.5-flash', true], ['gemini-flash-latest', true], ['gemini-flash-latest', false]]);
+    calls.length = 0;
+    assert.equal(await ai.ask('s', 'u'), 'Javob'); // ishlagan model eslab qolingan: 404 qayta chaqirilmaydi
+    assert.equal(calls[0][0], 'gemini-flash-latest');
   });
 });

@@ -26,7 +26,7 @@ frontend — `public/` (Workers Static Assets). Sxema va boshlang'ich ma'lumotla
 | `GEMINI_API_KEY` | yo'q | **Google Gemini API kaliti** ([aistudio.google.com/apikey](https://aistudio.google.com/apikey), bepul kvota bor) — AI tahlillari uchun. `GOOGLE_API_KEY`, `API_KEY` yoki `AI_API_KEY` (agar «AIza» bilan boshlansa) ham qabul qilinadi |
 | `OPENAI_API_KEY` | yo'q | OpenAI (ChatGPT) kaliti (pullik) |
 | `ANTHROPIC_API_KEY` | yo'q | Claude kaliti (ixtiyoriy). Kalit bo'lmasa qoidaga asoslangan zaxira matnlar ishlaydi |
-| `AI_MODEL` | yo'q | Standart: Gemini uchun `gemini-2.5-flash`, OpenAI uchun `gpt-4o-mini`, Claude uchun `claude-sonnet-5-5` |
+| `AI_MODEL` | yo'q | Standart: Gemini uchun `gemini-3.8-flash` (eskirsa avtomatik `gemini-flash-latest` ga o'tadi), OpenAI uchun `gpt-4o-mini`, Claude uchun `claude-sonnet-5-5` |
 | `AI_PROVIDER` | yo'q | `gemini`, `openai` yoki `anthropic` — bir nechta kalit bo'lsa tanlash (aks holda ustuvorlik: Gemini > OpenAI > Claude) |
 | `OPENAI_BASE_URL` | yo'q | OpenAI bilan mos boshqa xizmat uchun (standart: `https://api.openai.com/v1`) |
 | `SCOPUS_FEED_URL`, `OAK_FEED_URL` | yo'q | Jurnal fidlari (CSV/JSON), Refresh paytida 6 soatda bir marta olinadi |
