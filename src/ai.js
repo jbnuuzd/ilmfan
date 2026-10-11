@@ -1,28 +1,80 @@
 'use strict';
 /*
- * Sun'iy intellekt qatlami. ANTHROPIC_API_KEY berilsa Claude API ishlatiladi,
- * aks holda qoidaga asoslangan (offline) zaxira matnlar qaytariladi — platforma har holda ishlaydi.
+ * Sun'iy intellekt qatlami — ikki provayder: OpenAI (ChatGPT API) va Anthropic (Claude).
+ * Provayder kalitdan avtomatik aniqlanadi:
+ *   OPENAI_API_KEY               -> OpenAI (standart model: gpt-4o-mini)
+ *   ANTHROPIC_API_KEY            -> Anthropic (standart model: claude-sonnet-5-5)
+ *   AI_API_KEY yoki API_KEY      -> "sk-ant-" bilan boshlansa Anthropic, aks holda OpenAI
+ * Majburan tanlash: AI_PROVIDER=openai|anthropic. Modelni almashtirish: AI_MODEL.
+ * OpenAI bilan mos boshqa xizmat uchun: OPENAI_BASE_URL.
+ * Kalit bo'lmasa — qoidaga asoslangan (offline) zaxira matnlar qaytariladi, platforma har holda ishlaydi.
  */
-const MODEL = () => process.env.AI_MODEL || 'claude-sonnet-5-5';
-const enabled = () => !!process.env.ANTHROPIC_API_KEY;
+const DEFAULT_MODEL = { openai: 'gpt-4o-mini', anthropic: 'claude-sonnet-5-5' };
+
+function config(env = process.env) {
+  const generic = env.AI_API_KEY || env.API_KEY || '';
+  const forced = String(env.AI_PROVIDER || '').toLowerCase();
+  let provider, key;
+  if (forced === 'openai') { provider = 'openai'; key = env.OPENAI_API_KEY || generic; }
+  else if (forced === 'anthropic') { provider = 'anthropic'; key = env.ANTHROPIC_API_KEY || generic; }
+  else if (env.OPENAI_API_KEY) { provider = 'openai'; key = env.OPENAI_API_KEY; }
+  else if (env.ANTHROPIC_API_KEY) { provider = 'anthropic'; key = env.ANTHROPIC_API_KEY; }
+  else if (generic) { provider = generic.startsWith('sk-ant-') ? 'anthropic' : 'openai'; key = generic; }
+  if (!key) return { provider: null, key: '' };
+  return { provider, key: key.trim(), model: env.AI_MODEL || DEFAULT_MODEL[provider], baseUrl: (env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '') };
+}
+
+const enabled = () => !!config().key;
+const info = () => { const c = config(); return { enabled: !!c.key, provider: c.provider, model: c.model || null }; };
+
+let lastError = null;
+const lastAiError = () => lastError;
+
+/** Provayderga so'rov yuboradi; xato bo'lsa Error tashlaydi (kalit hech qachon xabarga qo'shilmaydi) */
+async function callRaw(system, user, { maxTokens, timeoutMs }) {
+  const c = config();
+  if (!c.key) throw new Error('AI kaliti sozlanmagan');
+  const signal = AbortSignal.timeout(timeoutMs);
+  let res;
+  if (c.provider === 'openai') {
+    res = await fetch(`${c.baseUrl}/chat/completions`, {
+      method: 'POST', signal,
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${c.key}` },
+      body: JSON.stringify({ model: c.model, max_completion_tokens: maxTokens, messages: [{ role: 'system', content: system }, { role: 'user', content: user }] }),
+    });
+  } else {
+    res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST', signal,
+      headers: { 'content-type': 'application/json', 'x-api-key': c.key, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: c.model, max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }] }),
+    });
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = String(data?.error?.message || data?.error || `HTTP ${res.status}`).replace(/sk-[A-Za-z0-9_-]{8,}/g, 'sk-***').slice(0, 300);
+    throw new Error(`${c.provider} (${res.status}): ${msg}`);
+  }
+  const text = c.provider === 'openai'
+    ? data.choices?.[0]?.message?.content
+    : (data.content || []).map((b) => b.text || '').join('');
+  if (!text || !String(text).trim()) throw new Error(`${c.provider}: bo'sh javob`);
+  return String(text).trim();
+}
 
 async function ask(system, user, { maxTokens = 700, timeoutMs = 30000 } = {}) {
   if (!enabled()) return null;
+  try { const t = await callRaw(system, user, { maxTokens, timeoutMs }); lastError = null; return t; }
+  catch (e) { lastError = String(e.message || e); console.error('[AI]', lastError); return null; }
+}
+
+/** Admin: kalit va model ishlayotganini tekshirish */
+async function test() {
+  const c = config();
+  if (!c.key) return { ok: false, error: "AI kaliti o'rnatilmagan (OPENAI_API_KEY yoki ANTHROPIC_API_KEY)" };
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({ model: MODEL(), max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }] }),
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return (data.content || []).map((b) => b.text || '').join('').trim() || null;
-  } catch { return null; }
+    const text = await callRaw('Qisqa javob bering.', "Faqat 'OK' deb javob bering.", { maxTokens: 20, timeoutMs: 20000 });
+    return { ok: true, provider: c.provider, model: c.model, reply: text.slice(0, 40) };
+  } catch (e) { return { ok: false, provider: c.provider, model: c.model, error: String(e.message || e) }; }
 }
 
 function extractJson(text) {
@@ -98,4 +150,4 @@ async function extractJournals(rawText, hint) {
   return extractJson(text);
 }
 
-module.exports = { enabled, motivation, journalFits, summarizeChanges, planAdvice, extractJournals, ask, fallbackMotivation };
+module.exports = { info, test, lastAiError, config, enabled, motivation, journalFits, summarizeChanges, planAdvice, extractJournals, ask, fallbackMotivation };

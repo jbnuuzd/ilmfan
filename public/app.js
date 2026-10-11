@@ -294,8 +294,10 @@ async function adminHome() {
   const cols = ['scopus_free', 'scopus_paid', 'oak_free', 'oak_paid', 'impact_free', 'impact_paid', 'impact_lite_free', 'impact_lite_paid', 'conference_free', 'conference_paid'];
   return h('div', {}, h('h1', {}, 'Administrator paneli'),
     h('div', { class: 'grid g3' }, stat('Tadqiqotchilar', s.users), stat('Jurnallar bazasi', s.journals), stat('Tekshirilmagan yozuvlar', s.unverified), stat('Scopus faol', s.scopus), stat('OAK faol', s.oak)),
-    h('div', { class: 'card' }, h('b', {}, 'Integratsiya holati: '), `AI: ${s.ai ? 'yoqilgan' : 'o‘chiq (ANTHROPIC_API_KEY yo‘q)'} · Scopus fid: ${s.feeds.scopus ? 'ulangan' : 'yo‘q'} · OAK fid: ${s.feeds.oak ? 'ulangan' : 'yo‘q'}`,
-      h('div', { style: 'margin-top:10px' }, h('button', { onclick: async (e) => { e.target.disabled = true; try { toast((await api('/admin/sync', { method: 'POST', body: {} })).message); } catch (x) { toast(x.message); } e.target.disabled = false; } }, '🔄 Fidlarni hozir sinxronlash'))),
+    h('div', { class: 'card' }, h('b', {}, 'Integratsiya holati: '), `AI: ${s.ai ? `yoqilgan (${s.aiInfo.provider === 'openai' ? 'OpenAI' : 'Claude'}, model: ${s.aiInfo.model})` : 'o‘chiq (OPENAI_API_KEY yoki ANTHROPIC_API_KEY yo‘q)'} · Scopus fid: ${s.feeds.scopus ? 'ulangan' : 'yo‘q'} · OAK fid: ${s.feeds.oak ? 'ulangan' : 'yo‘q'}`,
+      h('div', { style: 'margin-top:10px;display:flex;gap:8px;flex-wrap:wrap' },
+        h('button', { onclick: async (e) => { e.target.disabled = true; e.target.textContent = 'Sinalmoqda…'; try { const r = await api('/admin/ai-test', { method: 'POST', body: {} }); toast(r.ok ? `AI ishlayapti: ${r.provider}, ${r.model} — javob: «${r.reply}»` : `AI xatosi: ${r.error}`); } catch (x) { toast(x.message); } e.target.disabled = false; e.target.textContent = '🤖 AI ni sinash'; } }, '🤖 AI ni sinash'),
+        h('button', { onclick: async (e) => { e.target.disabled = true; try { toast((await api('/admin/sync', { method: 'POST', body: {} })).message); } catch (x) { toast(x.message); } e.target.disabled = false; } }, '🔄 Fidlarni hozir sinxronlash'))),
     h('div', { class: 'card' }, h('h3', {}, "Yo'nalishlar bo'yicha qamrov (har bir katakda kamida 10 ta bo'lishi kerak)"), h('div', { class: 'tablewrap' }, h('table', {}, h('tr', {}, [h('th', {}, "Yo'nalish"), ...cols.map((c) => h('th', {}, c.replace('_', ' ')))]),
       s.coverage.map((r) => h('tr', {}, h('td', {}, `${r.code} ${r.name}`), cols.map((c) => h('td', {}, h('span', { class: `pill ${r[c] >= 10 ? 'green' : 'red'}` }, r[c])))))))));
 }

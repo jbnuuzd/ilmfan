@@ -23,11 +23,16 @@ frontend — `public/` (Workers Static Assets). Sxema va boshlang'ich ma'lumotla
 |---|---|---|
 | `ADMIN_LOGIN` | ha | Admin logini (faqat sizda) |
 | `ADMIN_PASSWORD` | ha | Admin paroli — uzun va noyob tanlang. Secret berilmasa admin hisobi yaratilmaydi |
-| `ANTHROPIC_API_KEY` | yo'q | AI tahlillari uchun; bo'lmasa qoidaga asoslangan zaxira matnlar ishlaydi |
-| `AI_MODEL` | yo'q | Standart: `claude-sonnet-5-5` |
+| `OPENAI_API_KEY` | yo'q | **ChatGPT (OpenAI) API kaliti** — AI tahlillari uchun (tavsiya etilgan nom; `API_KEY` yoki `AI_API_KEY` ham qabul qilinadi) |
+| `ANTHROPIC_API_KEY` | yo'q | Claude kaliti (ixtiyoriy). Kalit bo'lmasa qoidaga asoslangan zaxira matnlar ishlaydi |
+| `AI_MODEL` | yo'q | Standart: OpenAI uchun `gpt-4o-mini`, Claude uchun `claude-sonnet-5-5` |
+| `AI_PROVIDER` | yo'q | `openai` yoki `anthropic` — ikkala kalit ham bo'lsa tanlash (aks holda OpenAI ustuvor) |
+| `OPENAI_BASE_URL` | yo'q | OpenAI bilan mos boshqa xizmat uchun (standart: `https://api.openai.com/v1`) |
 | `SCOPUS_FEED_URL`, `OAK_FEED_URL` | yo'q | Jurnal fidlari (CSV/JSON), Refresh paytida 6 soatda bir marta olinadi |
 
 Parolni almashtirish uchun secret qiymatini o'zgartiring — keyingi so'rovda admin paroli yangilanadi.
+
+**AI ni tekshirish:** admin kabineti → Statistika → «🤖 AI ni sinash» — kalit, model va (xato bo'lsa) sababini ko'rsatadi (masalan, 401 — noto'g'ri kalit, 429 — hisobda mablag' yo'q).
 
 **Mahalliy sinash:** `npm run dev:cf` (`.dev.vars.example` ni `.dev.vars` ga nusxalab, ichiga ADMIN_LOGIN/ADMIN_PASSWORD yozing).
 
@@ -41,7 +46,7 @@ Faqat Node.js ≥ 22.5 kerak (SQLite — `node:sqlite`; Cloudflare uchun `npm in
 ```bash
 export ADMIN_LOGIN=siz_tanlagan_login
 export ADMIN_PASSWORD='kuchli-parol'      # faqat sizda bo'ladi
-export ANTHROPIC_API_KEY=sk-ant-...       # ixtiyoriy: AI tahlillari uchun
+export OPENAI_API_KEY=sk-...              # ixtiyoriy: AI (ChatGPT) uchun; yoki ANTHROPIC_API_KEY
 npm start                                 # http://localhost:3000
 npm test
 ```
@@ -52,7 +57,7 @@ Admin hisobini ro'yxatdan o'tish orqali yaratib bo'lmaydi — u faqat shu muhit 
 | O'zgaruvchi | Vazifasi |
 |---|---|
 | `ADMIN_LOGIN`, `ADMIN_PASSWORD` | Admin kabineti hisobi |
-| `ANTHROPIC_API_KEY`, `AI_MODEL` | AI: jurnal moslik tahlili, motivatsiya xabari, reja maslahati, OAK ro'yxatini matndan ajratish |
+| `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`, `AI_MODEL` | AI: jurnal moslik tahlili, motivatsiya xabari, reja maslahati, jurnal bo'yicha maslahat, OAK ro'yxatini matndan ajratish |
 | `SCOPUS_FEED_URL` | SCImago/Scopus kvartillari CSV yoki JSON manzili |
 | `OAK_FEED_URL` | OAK ro'yxati (JSON/CSV) manzili |
 | `DATA_DIR`, `PORT` | Mahalliy rejimda ma'lumotlar papkasi va port |
@@ -66,7 +71,7 @@ oldinga, uzoq ko'rib chiqiladigan Scopus maqolalari o'rtaga, qo'llanma/monografi
 **Scopus / OAK / Impakt faktor / Konferensiyalar** — har biri Bepul va Pullik, har bir yo'nalish uchun 10 tagacha tavsiya:
 kvartil, boshlangan yil, rasmiy sayt, indekslanganlik isboti havolasi, AI moslik tahlili.
 
-**Jurnal batafsil oynasi:** istalgan tavsiya etilgan jurnal (yoki konferensiya) ustiga bosilganda: to'liq ma'lumot va indeks isboti havolalari, maqolani tayyorlash/rasmiylashtirish tavsiyalari (OAK, Scopus/WoS, arzon nashrlar uchun alohida bo'limlar) va yuborishning bosqichma-bosqich yo'riqnomasi (14 bosqich: indeksni tekshirish → yuborish tizimi → peer review → revision → to'lov → chop etish → nashrdan keyingi hujjatlar). `ANTHROPIC_API_KEY` bo'lsa, foydalanuvchi mavzusiga moslashtirilgan AI maslahat ham olish mumkin.
+**Jurnal batafsil oynasi:** istalgan tavsiya etilgan jurnal (yoki konferensiya) ustiga bosilganda: to'liq ma'lumot va indeks isboti havolalari, maqolani tayyorlash/rasmiylashtirish tavsiyalari (OAK, Scopus/WoS, arzon nashrlar uchun alohida bo'limlar) va yuborishning bosqichma-bosqich yo'riqnomasi (14 bosqich: indeksni tekshirish → yuborish tizimi → peer review → revision → to'lov → chop etish → nashrdan keyingi hujjatlar). AI kaliti bo'lsa, foydalanuvchi mavzusiga moslashtirilgan AI maslahat ham olish mumkin.
 
 **Arzon impakt (Scopus'siz):** Scopus'da indekslanmagan, Web of Science (ESCI/JCR) yoki muqobil IF manbasi bor, bepul yoki nashr to'lovi ≤ 600 USD bo'lgan nashrlar. OAK muqobil «impakt faktor» xizmatlarini (SJIF, GIF va h.k.) tan olmaydi — bunday jurnallar qizil belgi va ogohlantirish bilan ko'rsatiladi.
 

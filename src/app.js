@@ -230,7 +230,7 @@ function createHandler(db) {
 
   // AI: foydalanuvchi mavzusiga moslashtirilgan jurnal bo'yicha maslahat (keshlanadi)
   route('POST', '/api/journals/(\\d+)/advice', 'user', async (req, body, ctx) => {
-    if (!ai.enabled()) throw bad('AI uchun ANTHROPIC_API_KEY o‘rnatilmagan');
+    if (!ai.enabled()) throw bad('AI kaliti o‘rnatilmagan (OPENAI_API_KEY yoki ANTHROPIC_API_KEY)');
     const j = await db.prepare('SELECT * FROM journals WHERE id=?').get(Number(ctx.params[0]));
     if (!j) throw new HttpError(404, 'Jurnal topilmadi');
     const { profile, direction } = await rec.getProfileCtx(db, ctx.user.id);
@@ -238,7 +238,7 @@ function createHandler(db) {
     const text = await ai.ask("Siz tajribali ilmiy maslahatchisiz. Faqat o'zbek tilida, aniq va amaliy yozing. Bilmagan faktlarni to'qimang; jurnalning rasmiy 'Guide for Authors' hujjati ustuvorligini eslatib o'ting.",
       `Tadqiqotchi yo'nalishi: ${direction?.code} ${direction?.name}. Mavzu: ${profile.topic}. Jurnal: ${j.name} (${j.publisher}; kvartil: ${j.quartile || 'yo\'q'}; teglar: ${j.subjects}). ` +
       `Shu jurnalga maqola yuborish uchun: 1) mavzuni jurnal doirasiga qanday moslashtirish, 2) maqolaning aniq sarlavha/tuzilma g'oyasi, 3) rad etilish xavflari va ularni kamaytirish — 6-8 qisqa band bilan yozing.`, { maxTokens: 700, timeoutMs: 40000 });
-    if (!text) throw new HttpError(502, 'AI hozir javob bera olmadi, keyinroq urinib ko‘ring');
+    if (!text) throw new HttpError(502, 'AI hozir javob bera olmadi, keyinroq urinib ko‘ring (admin panelida «AI ni sinash» xato sababini ko‘rsatadi)');
     await db.prepare('INSERT OR REPLACE INTO journal_advice(user_id,journal_id,text) VALUES(?,?,?)').run(ctx.user.id, j.id, text);
     return { advice: text };
   });
@@ -267,7 +267,7 @@ function createHandler(db) {
       unverified: await n('SELECT COUNT(*) c FROM journals WHERE verified=0'),
       scopus: await n("SELECT COUNT(*) c FROM journals WHERE scopus_status='active'"),
       oak: await n("SELECT COUNT(*) c FROM journals WHERE oak_status='active'"),
-      ai: ai.enabled(),
+      ai: ai.enabled(), aiInfo: ai.info(),
       feeds: { scopus: !!process.env.SCOPUS_FEED_URL, oak: !!process.env.OAK_FEED_URL },
       coverage: await coverage(),
     };
@@ -358,13 +358,15 @@ function createHandler(db) {
     return { ok: true, total: items.length, stats, text: feeds.describe(stats) };
   });
 
+  route('POST', '/api/admin/ai-test', 'admin', async () => ai.test());
+
   route('POST', '/api/admin/sync', 'admin', async () => {
     const msg = await feeds.syncConfiguredFeeds(db, { force: true });
     return { ok: true, message: msg || 'Sozlangan fid manbalari yo‘q (SCOPUS_FEED_URL / OAK_FEED_URL).' };
   });
 
   route('POST', '/api/admin/ai-import', 'admin', async (req, body) => {
-    if (!ai.enabled()) throw bad('AI uchun ANTHROPIC_API_KEY o‘rnatilmagan');
+    if (!ai.enabled()) throw bad('AI kaliti o‘rnatilmagan (OPENAI_API_KEY yoki ANTHROPIC_API_KEY)');
     const arr = await ai.extractJournals(String(body.content || ''), body.source === 'oak' ? "OAK tomonidan e'tirof etilgan jurnallar ro'yxati" : 'Scopus jurnallari');
     if (!Array.isArray(arr) || !arr.length) throw bad('AI hech narsa ajrata olmadi');
     const items = arr.map(feeds.normalizeItem);
