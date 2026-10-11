@@ -29,9 +29,20 @@ frontend — `public/` (Workers Static Assets). Sxema va boshlang'ich ma'lumotla
 | `AI_MODEL` | yo'q | Standart: Gemini uchun `gemini-3.8-flash` (eskirsa avtomatik `gemini-flash-latest` ga o'tadi), OpenAI uchun `gpt-4o-mini`, Claude uchun `claude-sonnet-5-5` |
 | `AI_PROVIDER` | yo'q | `gemini`, `openai` yoki `anthropic` — bir nechta kalit bo'lsa tanlash (aks holda ustuvorlik: Gemini > OpenAI > Claude) |
 | `OPENAI_BASE_URL` | yo'q | OpenAI bilan mos boshqa xizmat uchun (standart: `https://api.openai.com/v1`) |
-| `SCOPUS_FEED_URL`, `OAK_FEED_URL` | yo'q | Jurnal fidlari (CSV/JSON), Refresh paytida 6 soatda bir marta olinadi |
+| `FEEDS_AUTO` | yo'q | `0` — avtomatik yuklashni o'chiradi |
+| `SCOPUS_FEED_URL` | yo'q | SCImago kvartillar CSV manzili (standart: `scimagojr.com/journalrank.php?out=xls`; `off` — o'chirish) |
+| `SCOPUS_DISCONTINUED_URL` | yo'q | OAK'ning «Scopus'dan chiqarilgan jurnallar» `.xlsx` manzili (standart manba o'rnatilgan; `off` — o'chirish) |
+| `OAK_FEED_URL` | yo'q | OAK ro'yxati (JSON/CSV) — standart manba yo'q |
+| `FEED_TTL_HOURS` | yo'q | Takroriy yuklash oralig'i (standart 168 = haftasiga) |
 
 Parolni almashtirish uchun secret qiymatini o'zgartiring — keyingi so'rovda admin paroli yangilanadi.
+
+**Jurnal ma'lumotlarini avtomatik yangilash:** Cloudflare Cron (har dushanba 03:00 UTC, `wrangler.jsonc → triggers.crons`) ikkita manbani o'zi yuklaydi:
+1. **SCImago CSV** — bazadagi jurnallarning kvartili yangilanadi (nom yoki ISSN bo'yicha moslashtiriladi; ISSN avtomatik to'ldiriladi);
+2. **OAK'ning «Scopus'dan chiqarilgan jurnallar» Excel ro'yxati** — mos jurnallar `discontinued` deb belgilanadi (SCImago keyingi yuklashda ularni qayta «faol» qilmaydi).
+
+Foydalanuvchilar Refresh bosganda qizil belgi va almashtirish aynan shu o'zgarishlar asosida chiqadi. Admin → Statistika da har bir manbaning oxirgi natijasi ko'rinadi; «Fidlarni hozir sinxronlash» tugmasi darhol ishga tushiradi. Sayt avtomatik yuklashni bloklasa (HTML/403), xato admin panelida ko'rinadi va ma'lumotga tegilmaydi — shunda faylni «Fid / import» orqali qo'lda yuklang.
+Avtomatik manzillar sandbox'dan tekshirilmagan (scimagojr.com va oak.uz unda ochilmaydi): format real fayllar uchun mo'ljallangan va sintetik fayllar bilan testlangan. Bu yuklashlar CPU talab qiladi (~15 MB CSV) — Workers Paid tavsiya etiladi.
 
 **AI ni tekshirish:** admin kabineti → Statistika → «🤖 AI ni sinash» — kalit, model va (xato bo'lsa) sababini ko'rsatadi (masalan, 401 — noto'g'ri kalit, 429 — hisobda mablag' yo'q).
 

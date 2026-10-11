@@ -14,5 +14,7 @@
   ],
   // Dashboard'da kiritilgan o'zgaruvchilar har deploy'da o'chib ketmasligi uchun
   "keep_vars": true,
+  // Jurnal fidlarini har dushanba 03:00 UTC da avtomatik yangilash
+  "triggers": { "crons": ["0 3 * * 1"] },
   "observability": { "enabled": true }
 }

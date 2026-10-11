@@ -1,4 +1,5 @@
 'use strict';
+process.env.FEEDS_AUTO = '0'; // testlar tashqi tarmoqqa chiqmasin
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { open } = require('../src/db-node');

@@ -294,7 +294,12 @@ async function adminHome() {
   const cols = ['scopus_free', 'scopus_paid', 'oak_free', 'oak_paid', 'impact_free', 'impact_paid', 'impact_lite_free', 'impact_lite_paid', 'conference_free', 'conference_paid'];
   return h('div', {}, h('h1', {}, 'Administrator paneli'),
     h('div', { class: 'grid g3' }, stat('Tadqiqotchilar', s.users), stat('Jurnallar bazasi', s.journals), stat('Tekshirilmagan yozuvlar', s.unverified), stat('Scopus faol', s.scopus), stat('OAK faol', s.oak)),
-    h('div', { class: 'card' }, h('b', {}, 'Integratsiya holati: '), `AI: ${s.ai ? `yoqilgan (${s.aiInfo.label}, model: ${s.aiInfo.model})` : 'o‘chiq (GEMINI_API_KEY yo‘q)'} · Scopus fid: ${s.feeds.scopus ? 'ulangan' : 'yo‘q'} · OAK fid: ${s.feeds.oak ? 'ulangan' : 'yo‘q'}`,
+    h('div', { class: 'card' }, h('b', {}, 'Integratsiya holati: '), `AI: ${s.ai ? `yoqilgan (${s.aiInfo.label}, model: ${s.aiInfo.model})` : 'o‘chiq (GEMINI_API_KEY yo‘q)'}`,
+      h('h3', { style: 'margin:12px 0 4px' }, 'Avtomatik yuklash manbalari (haftalik, Cron)'),
+      h('div', { class: 'tablewrap' }, h('table', {}, h('tr', {}, ['Manba', 'Holat', 'Oxirgi natija'].map((x) => h('th', {}, x))),
+        s.feeds.map((f) => h('tr', {}, h('td', {}, f.label, f.custom ? h('span', { class: 'pill' }, 'maxsus manzil') : null),
+          h('td', {}, f.enabled ? h('span', { class: 'pill green' }, 'yoqilgan') : h('span', { class: 'pill warn' }, 'o‘chiq / manzil yo‘q')),
+          h('td', { class: 'small' }, f.last ? [h('span', { class: `pill ${f.last.ok ? 'green' : 'red'}` }, f.last.ok ? 'OK' : 'xato'), ` ${f.last.at.replace('T', ' ').slice(0, 16)} UTC — ${f.last.message}`] : 'Hali yuklanmagan'))))),
       h('div', { style: 'margin-top:10px;display:flex;gap:8px;flex-wrap:wrap' },
         h('button', { onclick: async (e) => { e.target.disabled = true; e.target.textContent = 'Sinalmoqda…'; try { const r = await api('/admin/ai-test', { method: 'POST', body: {} }); toast(r.ok ? `AI ishlayapti: ${r.provider}, ${r.model} — javob: «${r.reply}»` : `AI xatosi: ${r.error}`); } catch (x) { toast(x.message); } e.target.disabled = false; e.target.textContent = '🤖 AI ni sinash'; } }, '🤖 AI ni sinash'),
         h('button', { onclick: async (e) => { e.target.disabled = true; try { toast((await api('/admin/sync', { method: 'POST', body: {} })).message); } catch (x) { toast(x.message); } e.target.disabled = false; } }, '🔄 Fidlarni hozir sinxronlash'))),

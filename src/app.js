@@ -212,7 +212,7 @@ function createHandler(db) {
   route('POST', '/api/journals/refresh', 'user', async (req, body, ctx) => {
     const { category, access } = body;
     if (!rec.CATEGORIES.includes(category) || !['free', 'paid'].includes(access)) throw bad('category/access noto‘g‘ri');
-    const res = await rec.refresh(db, ctx.user.id, category, access, { syncFeeds: () => feeds.syncConfiguredFeeds(db) });
+    const res = await rec.refresh(db, ctx.user.id, category, access, { syncFeeds: () => feeds.syncConfiguredFeeds(db, { quiet: true }) });
     if (res.needProfile) throw bad('Avval profilni to‘ldiring');
     return res;
   });
@@ -268,7 +268,7 @@ function createHandler(db) {
       scopus: await n("SELECT COUNT(*) c FROM journals WHERE scopus_status='active'"),
       oak: await n("SELECT COUNT(*) c FROM journals WHERE oak_status='active'"),
       ai: ai.enabled(), aiInfo: ai.info(),
-      feeds: { scopus: !!process.env.SCOPUS_FEED_URL, oak: !!process.env.OAK_FEED_URL },
+      feeds: await feeds.feedStatus(db),
       coverage: await coverage(),
     };
   });
@@ -362,7 +362,7 @@ function createHandler(db) {
 
   route('POST', '/api/admin/sync', 'admin', async () => {
     const msg = await feeds.syncConfiguredFeeds(db, { force: true });
-    return { ok: true, message: msg || 'Sozlangan fid manbalari yo‘q (SCOPUS_FEED_URL / OAK_FEED_URL).' };
+    return { ok: true, message: msg || 'Avtomatik yuklash o‘chirilgan (FEEDS_AUTO=0) yoki manbalar o‘chirilgan.' };
   });
 
   route('POST', '/api/admin/ai-import', 'admin', async (req, body) => {
