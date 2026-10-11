@@ -23,10 +23,11 @@ frontend — `public/` (Workers Static Assets). Sxema va boshlang'ich ma'lumotla
 |---|---|---|
 | `ADMIN_LOGIN` | ha | Admin logini (faqat sizda) |
 | `ADMIN_PASSWORD` | ha | Admin paroli — uzun va noyob tanlang. Secret berilmasa admin hisobi yaratilmaydi |
-| `OPENAI_API_KEY` | yo'q | **ChatGPT (OpenAI) API kaliti** — AI tahlillari uchun (tavsiya etilgan nom; `API_KEY` yoki `AI_API_KEY` ham qabul qilinadi) |
+| `GEMINI_API_KEY` | yo'q | **Google Gemini API kaliti** ([aistudio.google.com/apikey](https://aistudio.google.com/apikey), bepul kvota bor) — AI tahlillari uchun. `GOOGLE_API_KEY`, `API_KEY` yoki `AI_API_KEY` (agar «AIza» bilan boshlansa) ham qabul qilinadi |
+| `OPENAI_API_KEY` | yo'q | OpenAI (ChatGPT) kaliti (pullik) |
 | `ANTHROPIC_API_KEY` | yo'q | Claude kaliti (ixtiyoriy). Kalit bo'lmasa qoidaga asoslangan zaxira matnlar ishlaydi |
-| `AI_MODEL` | yo'q | Standart: OpenAI uchun `gpt-4o-mini`, Claude uchun `claude-sonnet-5-5` |
-| `AI_PROVIDER` | yo'q | `openai` yoki `anthropic` — ikkala kalit ham bo'lsa tanlash (aks holda OpenAI ustuvor) |
+| `AI_MODEL` | yo'q | Standart: Gemini uchun `gemini-2.5-flash`, OpenAI uchun `gpt-4o-mini`, Claude uchun `claude-sonnet-5-5` |
+| `AI_PROVIDER` | yo'q | `gemini`, `openai` yoki `anthropic` — bir nechta kalit bo'lsa tanlash (aks holda ustuvorlik: Gemini > OpenAI > Claude) |
 | `OPENAI_BASE_URL` | yo'q | OpenAI bilan mos boshqa xizmat uchun (standart: `https://api.openai.com/v1`) |
 | `SCOPUS_FEED_URL`, `OAK_FEED_URL` | yo'q | Jurnal fidlari (CSV/JSON), Refresh paytida 6 soatda bir marta olinadi |
 
@@ -46,7 +47,7 @@ Faqat Node.js ≥ 22.5 kerak (SQLite — `node:sqlite`; Cloudflare uchun `npm in
 ```bash
 export ADMIN_LOGIN=siz_tanlagan_login
 export ADMIN_PASSWORD='kuchli-parol'      # faqat sizda bo'ladi
-export OPENAI_API_KEY=sk-...              # ixtiyoriy: AI (ChatGPT) uchun; yoki ANTHROPIC_API_KEY
+export GEMINI_API_KEY=AIza...             # ixtiyoriy: AI uchun (Google Gemini); yoki OPENAI_API_KEY / ANTHROPIC_API_KEY
 npm start                                 # http://localhost:3000
 npm test
 ```
@@ -57,7 +58,7 @@ Admin hisobini ro'yxatdan o'tish orqali yaratib bo'lmaydi — u faqat shu muhit 
 | O'zgaruvchi | Vazifasi |
 |---|---|
 | `ADMIN_LOGIN`, `ADMIN_PASSWORD` | Admin kabineti hisobi |
-| `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`, `AI_MODEL` | AI: jurnal moslik tahlili, motivatsiya xabari, reja maslahati, jurnal bo'yicha maslahat, OAK ro'yxatini matndan ajratish |
+| `GEMINI_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`, `AI_MODEL` | AI: jurnal moslik tahlili, motivatsiya xabari, reja maslahati, jurnal bo'yicha maslahat, OAK ro'yxatini matndan ajratish |
 | `SCOPUS_FEED_URL` | SCImago/Scopus kvartillari CSV yoki JSON manzili |
 | `OAK_FEED_URL` | OAK ro'yxati (JSON/CSV) manzili |
 | `DATA_DIR`, `PORT` | Mahalliy rejimda ma'lumotlar papkasi va port |

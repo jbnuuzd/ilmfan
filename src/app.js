@@ -230,7 +230,7 @@ function createHandler(db) {
 
   // AI: foydalanuvchi mavzusiga moslashtirilgan jurnal bo'yicha maslahat (keshlanadi)
   route('POST', '/api/journals/(\\d+)/advice', 'user', async (req, body, ctx) => {
-    if (!ai.enabled()) throw bad('AI kaliti o‘rnatilmagan (OPENAI_API_KEY yoki ANTHROPIC_API_KEY)');
+    if (!ai.enabled()) throw bad('AI kaliti o‘rnatilmagan (GEMINI_API_KEY)');
     const j = await db.prepare('SELECT * FROM journals WHERE id=?').get(Number(ctx.params[0]));
     if (!j) throw new HttpError(404, 'Jurnal topilmadi');
     const { profile, direction } = await rec.getProfileCtx(db, ctx.user.id);
@@ -366,7 +366,7 @@ function createHandler(db) {
   });
 
   route('POST', '/api/admin/ai-import', 'admin', async (req, body) => {
-    if (!ai.enabled()) throw bad('AI kaliti o‘rnatilmagan (OPENAI_API_KEY yoki ANTHROPIC_API_KEY)');
+    if (!ai.enabled()) throw bad('AI kaliti o‘rnatilmagan (GEMINI_API_KEY)');
     const arr = await ai.extractJournals(String(body.content || ''), body.source === 'oak' ? "OAK tomonidan e'tirof etilgan jurnallar ro'yxati" : 'Scopus jurnallari');
     if (!Array.isArray(arr) || !arr.length) throw bad('AI hech narsa ajrata olmadi');
     const items = arr.map(feeds.normalizeItem);

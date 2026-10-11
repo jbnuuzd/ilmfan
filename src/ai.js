@@ -1,31 +1,33 @@
 'use strict';
 /*
- * Sun'iy intellekt qatlami — ikki provayder: OpenAI (ChatGPT API) va Anthropic (Claude).
- * Provayder kalitdan avtomatik aniqlanadi:
- *   OPENAI_API_KEY               -> OpenAI (standart model: gpt-4o-mini)
- *   ANTHROPIC_API_KEY            -> Anthropic (standart model: claude-sonnet-5-5)
- *   AI_API_KEY yoki API_KEY      -> "sk-ant-" bilan boshlansa Anthropic, aks holda OpenAI
- * Majburan tanlash: AI_PROVIDER=openai|anthropic. Modelni almashtirish: AI_MODEL.
- * OpenAI bilan mos boshqa xizmat uchun: OPENAI_BASE_URL.
+ * Sun'iy intellekt qatlami — uch provayder: Google Gemini, OpenAI (ChatGPT) va Anthropic (Claude).
+ * Provayder kalitdan avtomatik aniqlanadi (bir nechta kalit bo'lsa, ustuvorlik: Gemini > OpenAI > Claude):
+ *   GEMINI_API_KEY (yoki GOOGLE_API_KEY)  -> Google Gemini (standart model: gemini-2.5-flash)
+ *   OPENAI_API_KEY                         -> OpenAI (standart model: gpt-4o-mini)
+ *   ANTHROPIC_API_KEY                      -> Anthropic (standart model: claude-sonnet-5-5)
+ *   AI_API_KEY yoki API_KEY                -> "AIza" bilan boshlansa Gemini, "sk-ant-" bilan Anthropic, aks holda OpenAI
+ * Majburan tanlash: AI_PROVIDER=gemini|openai|anthropic. Modelni almashtirish: AI_MODEL.
  * Kalit bo'lmasa — qoidaga asoslangan (offline) zaxira matnlar qaytariladi, platforma har holda ishlaydi.
  */
-const DEFAULT_MODEL = { openai: 'gpt-4o-mini', anthropic: 'claude-sonnet-5-5' };
+const DEFAULT_MODEL = { gemini: 'gemini-2.5-flash', openai: 'gpt-4o-mini', anthropic: 'claude-sonnet-5-5' };
+const PROVIDER_LABEL = { gemini: 'Google Gemini', openai: 'OpenAI', anthropic: 'Claude' };
 
 function config(env = process.env) {
   const generic = env.AI_API_KEY || env.API_KEY || '';
+  const keyOf = { gemini: env.GEMINI_API_KEY || env.GOOGLE_API_KEY, openai: env.OPENAI_API_KEY, anthropic: env.ANTHROPIC_API_KEY };
   const forced = String(env.AI_PROVIDER || '').toLowerCase();
   let provider, key;
-  if (forced === 'openai') { provider = 'openai'; key = env.OPENAI_API_KEY || generic; }
-  else if (forced === 'anthropic') { provider = 'anthropic'; key = env.ANTHROPIC_API_KEY || generic; }
-  else if (env.OPENAI_API_KEY) { provider = 'openai'; key = env.OPENAI_API_KEY; }
-  else if (env.ANTHROPIC_API_KEY) { provider = 'anthropic'; key = env.ANTHROPIC_API_KEY; }
-  else if (generic) { provider = generic.startsWith('sk-ant-') ? 'anthropic' : 'openai'; key = generic; }
+  if (DEFAULT_MODEL[forced]) { provider = forced; key = keyOf[forced] || generic; }
+  else if (keyOf.gemini) { provider = 'gemini'; key = keyOf.gemini; }
+  else if (keyOf.openai) { provider = 'openai'; key = keyOf.openai; }
+  else if (keyOf.anthropic) { provider = 'anthropic'; key = keyOf.anthropic; }
+  else if (generic) { provider = generic.startsWith('AIza') ? 'gemini' : generic.startsWith('sk-ant-') ? 'anthropic' : 'openai'; key = generic; }
   if (!key) return { provider: null, key: '' };
   return { provider, key: key.trim(), model: env.AI_MODEL || DEFAULT_MODEL[provider], baseUrl: (env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '') };
 }
 
 const enabled = () => !!config().key;
-const info = () => { const c = config(); return { enabled: !!c.key, provider: c.provider, model: c.model || null }; };
+const info = () => { const c = config(); return { enabled: !!c.key, provider: c.provider, label: PROVIDER_LABEL[c.provider] || null, model: c.model || null }; };
 
 let lastError = null;
 const lastAiError = () => lastError;
@@ -33,10 +35,19 @@ const lastAiError = () => lastError;
 /** Provayderga so'rov yuboradi; xato bo'lsa Error tashlaydi (kalit hech qachon xabarga qo'shilmaydi) */
 async function callRaw(system, user, { maxTokens, timeoutMs }) {
   const c = config();
-  if (!c.key) throw new Error('AI kaliti sozlanmagan');
+  if (!c.key) throw new Error('AI kaliti sozlanmagan (GEMINI_API_KEY)');
   const signal = AbortSignal.timeout(timeoutMs);
   let res;
-  if (c.provider === 'openai') {
+  if (c.provider === 'gemini') {
+    // "thinking" tokenlari chiqish limitidan ayrilmasligi uchun flash modellarda o'chiriladi
+    const generationConfig = { maxOutputTokens: Math.max(maxTokens * 2, 512) };
+    if (/flash/i.test(c.model)) generationConfig.thinkingConfig = { thinkingBudget: 0 };
+    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(c.model)}:generateContent`, {
+      method: 'POST', signal,
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': c.key },
+      body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents: [{ role: 'user', parts: [{ text: user }] }], generationConfig }),
+    });
+  } else if (c.provider === 'openai') {
     res = await fetch(`${c.baseUrl}/chat/completions`, {
       method: 'POST', signal,
       headers: { 'content-type': 'application/json', authorization: `Bearer ${c.key}` },
@@ -51,12 +62,14 @@ async function callRaw(system, user, { maxTokens, timeoutMs }) {
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const msg = String(data?.error?.message || data?.error || `HTTP ${res.status}`).replace(/sk-[A-Za-z0-9_-]{8,}/g, 'sk-***').slice(0, 300);
+    const msg = String(data?.error?.message || data?.error || `HTTP ${res.status}`).replace(/(sk-|AIza)[A-Za-z0-9_-]{8,}/g, '$1***').slice(0, 300);
     throw new Error(`${c.provider} (${res.status}): ${msg}`);
   }
-  const text = c.provider === 'openai'
-    ? data.choices?.[0]?.message?.content
-    : (data.content || []).map((b) => b.text || '').join('');
+  const text = c.provider === 'gemini'
+    ? (data.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('')
+    : c.provider === 'openai'
+      ? data.choices?.[0]?.message?.content
+      : (data.content || []).map((b) => b.text || '').join('');
   if (!text || !String(text).trim()) throw new Error(`${c.provider}: bo'sh javob`);
   return String(text).trim();
 }
@@ -70,7 +83,7 @@ async function ask(system, user, { maxTokens = 700, timeoutMs = 30000 } = {}) {
 /** Admin: kalit va model ishlayotganini tekshirish */
 async function test() {
   const c = config();
-  if (!c.key) return { ok: false, error: "AI kaliti o'rnatilmagan (OPENAI_API_KEY yoki ANTHROPIC_API_KEY)" };
+  if (!c.key) return { ok: false, error: "AI kaliti o'rnatilmagan (GEMINI_API_KEY)" };
   try {
     const text = await callRaw('Qisqa javob bering.', "Faqat 'OK' deb javob bering.", { maxTokens: 20, timeoutMs: 20000 });
     return { ok: true, provider: c.provider, model: c.model, reply: text.slice(0, 40) };

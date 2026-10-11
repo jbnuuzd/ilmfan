@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const ai = require('../src/ai');
 
-const KEYS = ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'AI_API_KEY', 'API_KEY', 'AI_PROVIDER', 'AI_MODEL', 'OPENAI_BASE_URL'];
+const KEYS = ['GEMINI_API_KEY', 'GOOGLE_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'AI_API_KEY', 'API_KEY', 'AI_PROVIDER', 'AI_MODEL', 'OPENAI_BASE_URL'];
 function withEnv(env, fn) {
   const saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
   KEYS.forEach((k) => delete process.env[k]);
@@ -70,5 +70,43 @@ test('OpenAI orqali motivatsiya va jurnal moslik tahlili (JSON ```blok``` ichida
     assert.match(await ai.motivation({ name: 'Test', progressPct: 10, daysLeft: 5, topic: 't', doneTasks: 1, totalTasks: 9, nextTask: 'x' }), /^Hurmatli Test/);
     const fits = await ai.journalFits({ topic: 't' }, { code: '1', name: 'n' }, [{ id: 1, name: 'J', matchScore: 50, acceptance: 3 }]);
     assert.deepEqual([fits.get(1).score, fits.get(1).text, fits.get(1).ai], [77, 'Mos jurnal.', true]);
+  });
+});
+
+test('Gemini: aniqlash, so‘rov formati va javob', async () => {
+  await withEnv({ GEMINI_API_KEY: 'AIzaSyFAKEKEY1234567890' }, async () => {
+    assert.deepEqual([ai.info().provider, ai.info().model, ai.info().label], ['gemini', 'gemini-2.5-flash', 'Google Gemini']);
+    let seen;
+    global.fetch = async (url, init) => { seen = { url, h: init.headers, body: JSON.parse(init.body) }; return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'Salom ' }, { text: 'dunyo' }] } }] }), { status: 200 }); };
+    assert.equal(await ai.ask('tizim', 'savol', { maxTokens: 300 }), 'Salom dunyo');
+    assert.equal(seen.url, 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent');
+    assert.equal(seen.h['x-goog-api-key'], 'AIzaSyFAKEKEY1234567890');
+    assert.equal(seen.body.systemInstruction.parts[0].text, 'tizim');
+    assert.equal(seen.body.contents[0].parts[0].text, 'savol');
+    assert.equal(seen.body.generationConfig.thinkingConfig.thinkingBudget, 0);
+    assert.ok(seen.body.generationConfig.maxOutputTokens >= 300);
+  });
+  await withEnv({ GOOGLE_API_KEY: 'AIzaX' }, () => assert.equal(ai.info().provider, 'gemini'));
+  await withEnv({ API_KEY: 'AIzaSyABC' }, () => assert.equal(ai.info().provider, 'gemini'));
+  await withEnv({ GEMINI_API_KEY: 'AIzaX', OPENAI_API_KEY: 'sk-x' }, () => assert.equal(ai.info().provider, 'gemini'));
+  await withEnv({ GEMINI_API_KEY: 'AIzaX', OPENAI_API_KEY: 'sk-x', AI_PROVIDER: 'openai' }, () => assert.equal(ai.info().provider, 'openai'));
+  await withEnv({ GEMINI_API_KEY: 'AIzaX', AI_MODEL: 'gemini-2.5-pro' }, async () => {
+    let body;
+    global.fetch = async (url, init) => { body = JSON.parse(init.body); return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'ok' }] } }] }), { status: 200 }); };
+    await ai.ask('s', 'u');
+    assert.equal(body.generationConfig.thinkingConfig, undefined);
+  });
+});
+
+test('Gemini xatolari: kalit yashiriladi, bo‘sh javob xato sifatida', async () => {
+  await withEnv({ GEMINI_API_KEY: 'AIzaSyFAKEKEY1234567890' }, async () => {
+    global.fetch = async () => new Response(JSON.stringify({ error: { code: 400, message: 'API key not valid. Please pass a valid API key. AIzaSyFAKEKEY1234567890' } }), { status: 400 });
+    const t = await ai.test();
+    assert.equal(t.ok, false); assert.match(t.error, /gemini \(400\)/); assert.ok(!t.error.includes('FAKEKEY1234567890'));
+    global.fetch = async () => new Response(JSON.stringify({ candidates: [{ finishReason: 'SAFETY' }] }), { status: 200 });
+    assert.equal(await ai.ask('s', 'u'), null);
+    assert.match(ai.lastAiError(), /bo'sh javob/);
+    global.fetch = async () => new Response(JSON.stringify({ error: { message: 'Quota exceeded' } }), { status: 429 });
+    assert.match((await ai.test()).error, /429/);
   });
 });
