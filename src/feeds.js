@@ -149,13 +149,13 @@ async function parseDiscontinuedXlsx(bytes) {
  * keepDiscontinued: Scopus holati allaqachon 'discontinued' bo'lsa, uni qayta 'active' qilmaydi (faqat kvartil yangilanadi)
  * Barcha yozuvlar bitta (bo'laklangan) batch bilan bajariladi — D1 so'rovlar sonini tejaydi.
  */
-async function applyFeed(db, items, source, { mode = 'delta', addNew = false, keepDiscontinued = false } = {}) {
+async function applyFeed(db, items, source, { mode = 'delta', addNew = false, keepDiscontinued = false, nameOnlyMinWords = 0, fillIssn = true } = {}) {
   const all = await db.prepare('SELECT * FROM journals').all();
   const byIssn = new Map();
   for (const j of all) for (const i of issnList(j.issn)) byIssn.set(i, j);
   const byName = new Map(all.map((j) => [clean(j.name), j]));
   const seen = new Set();
-  const stats = { updated: 0, added: 0, delisted: 0, unchanged: 0 };
+  const stats = { updated: 0, added: 0, delisted: 0, unchanged: 0, review: [] };
   const stmts = [];
   const set = (j, field, val) => {
     if (String(j[field] ?? '') === String(val ?? '')) return false;
@@ -167,7 +167,17 @@ async function applyFeed(db, items, source, { mode = 'delta', addNew = false, ke
   const createdNames = new Set();
   for (const it of items) {
     if (!it.name && !(it.issns || []).length) continue;
-    let j = ((it.issns && it.issns.length ? it.issns : (it.issn ? [it.issn] : [])).map((i) => byIssn.get(i)).find(Boolean)) || byName.get(clean(it.name));
+    // Moslashtirish: ISSN — ishonchli. Nom bo'yicha faqat bazadagi jurnalning ISSN'i noma'lum bo'lsa;
+    // ikkala tomonda ISSN bor va farq qilsa — bu BOSHQA jurnal (nomdoshlik). Umumiy (qisqa) nomlar avtomatik qo'llanmaydi.
+    const itemIssns = it.issns && it.issns.length ? it.issns : (it.issn ? [it.issn] : []);
+    let j = itemIssns.map((i) => byIssn.get(i)).find(Boolean);
+    if (!j) {
+      const cand = byName.get(clean(it.name));
+      if (cand && !(itemIssns.length && issnList(cand.issn).length)) {
+        if (nameOnlyMinWords && clean(cand.name).split(' ').length < nameOnlyMinWords) { stats.review.push(it.name); stats.unchanged++; continue; }
+        j = cand;
+      }
+    }
     if (!j) {
       if (!addNew || !it.name || createdNames.has(it.name.toLowerCase())) { stats.unchanged++; continue; }
       createdNames.add(it.name.toLowerCase());
@@ -185,7 +195,7 @@ async function applyFeed(db, items, source, { mode = 'delta', addNew = false, ke
     } else if (source === 'oak') {
       changed = set(j, 'oak_status', it.oak_status || 'active') || changed;
     }
-    if (it.issn && !j.issn) { set(j, 'issn', it.issn); for (const i of issnList(it.issn)) byIssn.set(i, j); }
+    if (fillIssn && it.issn && !j.issn) { set(j, 'issn', it.issn); for (const i of issnList(it.issn)) byIssn.set(i, j); }
     if (changed) { stmts.push(['UPDATE journals SET verified=1 WHERE id=?', j.id]); stats.updated++; } else stats.unchanged++;
   }
   if (mode === 'full') {
@@ -197,13 +207,13 @@ async function applyFeed(db, items, source, { mode = 'delta', addNew = false, ke
   return stats;
 }
 
-const describe = (s) => `yangilandi: ${s.updated}, yangi: ${s.added}, ro'yxatdan chiqqan: ${s.delisted}`;
+const describe = (s) => `yangilandi: ${s.updated}, yangi: ${s.added}, ro'yxatdan chiqqan: ${s.delisted}` + (s.review?.length ? `; nomi umumiy bo'lgani uchun avtomatik qo'llanmadi (ISSN kerak): ${s.review.slice(0, 8).join(', ')}${s.review.length > 8 ? '…' : ''}` : '');
 
 // ---------------- Avtomatik yuklash ----------------
-const UA = 'Mozilla/5.0 (compatible; IlmiyYuksalishBot/1.0; +https://github.com/jbnuuzd/ilmfan)';
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 
 async function download(url) {
-  const res = await fetch(url, { headers: { 'user-agent': UA, accept: 'text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/json,*/*' }, redirect: 'follow', signal: AbortSignal.timeout(90000) });
+  const res = await fetch(url, { headers: { 'user-agent': UA, accept: 'text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/json,text/html;q=0.8,*/*;q=0.5', 'accept-language': 'en-US,en;q=0.9', referer: new URL(url).origin + '/' }, redirect: 'follow', signal: AbortSignal.timeout(90000) });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const bytes = new Uint8Array(await res.arrayBuffer());
   if (bytes.length < 50) throw new Error("javob bo'sh");
@@ -211,24 +221,31 @@ async function download(url) {
 }
 const looksHtml = (text) => /^\s*<(!doctype|html|head|body)/i.test(text.slice(0, 200));
 
+/** SCImago CSV matnini bazadagi jurnallarga qo'llaydi (katta fayl uchun tez skaner) */
+async function applyScimagoText(db, text) {
+  const journals = await db.prepare('SELECT name, issn FROM journals').all();
+  const names = new Set(journals.map((j) => clean(j.name)));
+  const issns = new Set(journals.flatMap((j) => issnList(j.issn)));
+  const { items, rows } = scanScimago(text, names, issns);
+  const stats = await applyFeed(db, items, 'scopus', { mode: 'delta', keepDiscontinued: true, nameOnlyMinWords: 2 });
+  return { rows, found: items.length, stats, text: `${rows} qator ko'rib chiqildi, bazadagi ${items.length} ta jurnal topildi — ${describe(stats)}` };
+}
+const isScimagoCsv = (text) => /sjr best quartile/i.test(String(text).slice(0, 3000));
+
 async function runSource(db, key) {
   const url = sourceUrl(key);
   const bytes = await download(url);
   if (key === 'discontinued') {
     if (!(bytes[0] === 0x50 && bytes[1] === 0x4b)) throw new Error("javob .xlsx emas (sayt bloklagan yoki manzil o'zgargan bo'lishi mumkin)");
     const items = await parseDiscontinuedXlsx(bytes);
-    const stats = await applyFeed(db, items, 'scopus', { mode: 'delta' });
+    // ISSN yoki to'liq (>=3 so'zli) nom bo'yicha; ISSN faqat ishonchli manbadan (SCImago) to'ldiriladi
+    const stats = await applyFeed(db, items, 'scopus', { mode: 'delta', nameOnlyMinWords: 3, fillIssn: false });
     return `${items.length} ta chiqarilgan jurnal o'qildi — ${describe(stats)}`;
   }
   const text = new TextDecoder().decode(bytes);
   if (looksHtml(text)) throw new Error("javob CSV emas, HTML sahifa (sayt avtomatik yuklashni bloklagan bo'lishi mumkin)");
   if (key === 'scimago') {
-    const journals = await db.prepare('SELECT name, issn FROM journals').all();
-    const names = new Set(journals.map((j) => clean(j.name)));
-    const issns = new Set(journals.flatMap((j) => issnList(j.issn)));
-    const { items, rows } = scanScimago(text, names, issns);
-    const stats = await applyFeed(db, items, 'scopus', { mode: 'delta', keepDiscontinued: true });
-    return `${rows} qator ko'rib chiqildi, bazadagi ${items.length} ta jurnal topildi — ${describe(stats)}`;
+    return (await applyScimagoText(db, text)).text;
   }
   const items = parseFeed(text);
   const stats = await applyFeed(db, items, SOURCES[key].source, { mode: process.env[`${SOURCES[key].env}_FULL`] === '1' ? 'full' : 'delta' });
@@ -275,4 +292,4 @@ async function feedStatus(db) {
   return list;
 }
 
-module.exports = { parseFeed, parseCsv, applyFeed, syncConfiguredFeeds, feedStatus, describe, normalizeItem, scanScimago, parseDiscontinuedXlsx, sourceUrl, SOURCES };
+module.exports = { applyScimagoText, isScimagoCsv, parseFeed, parseCsv, applyFeed, syncConfiguredFeeds, feedStatus, describe, normalizeItem, scanScimago, parseDiscontinuedXlsx, sourceUrl, SOURCES };

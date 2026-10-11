@@ -351,8 +351,14 @@ function createHandler(db) {
   // Fid yuklash: CSV/JSON matn
   route('POST', '/api/admin/import', 'admin', async (req, body) => {
     const source = body.source === 'oak' ? 'oak' : 'scopus';
+    const content = String(body.content || '');
+    if (source === 'scopus' && feeds.isScimagoCsv(content)) {
+      // SCImago to'liq CSV (~15 MB): faqat bazadagi jurnallar ajratib olinadi
+      let r; try { r = await feeds.applyScimagoText(db, content); } catch (e) { throw bad(`SCImago faylini o'qib bo'lmadi: ${e.message}`); }
+      return { ok: true, total: r.rows, stats: r.stats, text: r.text };
+    }
     let items;
-    try { items = feeds.parseFeed(String(body.content || '')); } catch (e) { throw bad(`Faylni o'qib bo'lmadi: ${e.message}`); }
+    try { items = feeds.parseFeed(content); } catch (e) { throw bad(`Faylni o'qib bo'lmadi: ${e.message}`); }
     if (!items.length) throw bad('Faylda yozuv topilmadi');
     const stats = await feeds.applyFeed(db, items, source, { mode: body.full ? 'full' : 'delta', addNew: !!body.addNew });
     return { ok: true, total: items.length, stats, text: feeds.describe(stats) };
@@ -386,7 +392,7 @@ function createHandler(db) {
 
   async function readBody(request) {
     const text = await request.text();
-    if (text.length > 6e6) throw new HttpError(413, 'Hajm juda katta');
+    if (text.length > 40e6) throw new HttpError(413, 'Hajm juda katta (40 MB dan oshmasin)');
     if (!text) return {};
     try { return JSON.parse(text); } catch { throw bad('JSON noto‘g‘ri'); }
   }

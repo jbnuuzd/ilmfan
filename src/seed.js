@@ -283,7 +283,7 @@ const quotes = [
   ['Santyago Ramon-i-Kaxal', "Miyaning qaysi sohasini rivojlantirmoqchi bo‘lsangiz, o‘sha sohada qat’iyat bilan mashq qiling.", "Ramon-i-Kaxal asarlaridagi fikr mazmuni"],
 ];
 
-const SEED_VERSION = 3;
+const SEED_VERSION = 4;
 
 const insertStmt = (table, obj, ignore = true) => {
   const keys = Object.keys(obj);
@@ -312,6 +312,17 @@ async function seedAll(db) {
     stmts.push(["DELETE FROM journals WHERE verified=0 AND name IN ('Iqtisodiyot va ta’lim','Iqtisodiyot va innovatsion texnologiyalar','Moliya va bank ishi')"]);
   }
   if (version < 3) stmts.push(["UPDATE journals SET if_source='jcr' WHERE impact_factor IS NOT NULL AND if_source=''"]);
+  if (version < 4) {
+    // Avvalgi avtomatik yuklash ISSN'siz, faqat nom bo'yicha moslashtirib, umumiy nomli (<3 so'z) jurnallarni
+    // "Scopus'dan chiqqan" deb belgilashi mumkin edi — bunday belgilar qaytariladi.
+    const bad = "scopus_status='discontinued' AND (length(name)-length(replace(name,' ','')))<2 AND id IN (SELECT journal_id FROM journal_changes WHERE field='scopus_status' AND new_value='discontinued' AND source='feed:scopus')";
+    stmts.push([`INSERT INTO journal_changes(journal_id,field,old_value,new_value,source) SELECT id,'scopus_status','discontinued','active','migration' FROM journals WHERE ${bad}`]);
+    stmts.push([`UPDATE journals SET
+      scopus_status = COALESCE((SELECT c.old_value FROM journal_changes c WHERE c.journal_id=journals.id AND c.field='scopus_status' AND c.new_value='discontinued' AND c.source='feed:scopus' ORDER BY c.id DESC LIMIT 1), 'active'),
+      issn = CASE WHEN EXISTS (SELECT 1 FROM journal_changes c WHERE c.journal_id=journals.id AND c.field='issn' AND c.old_value='' AND c.source='feed:scopus') THEN '' ELSE issn END
+      WHERE ${bad}`]);
+    stmts.push(["UPDATE user_journals SET flag='', flag_reason='' WHERE flag='delisted' AND journal_id IN (SELECT id FROM journals WHERE scopus_status='active')"]);
+  }
   for (const [author, text, note] of quotes) stmts.push(insertStmt('quotes', { author, text, note }));
   await batchChunked(db, stmts, 60);
   await setSetting(db, 'seed_version', SEED_VERSION);

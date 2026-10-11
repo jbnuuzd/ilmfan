@@ -115,3 +115,53 @@ test('sozlamalar: FEEDS_AUTO=0, "off", maxsus manzil', () => {
   delete process.env.SCOPUS_FEED_URL;
   assert.match(feeds.sourceUrl('scimago'), /scimagojr\.com/); assert.match(feeds.sourceUrl('discontinued'), /Discontinued-sources/);
 });
+
+test('ishonchli moslashtirish: umumiy nom avtomatik qo‘llanmaydi, ISSN — hakam, nomdosh jurnal adashtirilmaydi', async () => {
+  const db = await freshDb();
+  const disc = (name, issns) => ({ name, issn: issns[0] || '', issns, quartile: '', scopus_status: 'discontinued', oak_status: '', publisher: '', subjects: '', access: '' });
+  // 1) "Energy" — 1 so'zli nom, bazada ISSN yo'q: avtomatik belgilanmaydi, "tekshirish" ro'yxatiga tushadi
+  let st = await feeds.applyFeed(db, [disc('Energy', ['11111111'])], 'scopus', { nameOnlyMinWords: 3, fillIssn: false });
+  assert.deepEqual(st.review, ['Energy']);
+  assert.equal((await q(db, 'Energy')).scopus_status, 'active');
+  assert.equal((await q(db, 'Energy')).issn, '');
+  assert.match(feeds.describe(st), /ISSN kerak\): Energy/);
+  // 2) Bazada ISSN bor: boshqa ISSN — nomdosh boshqa jurnal, tegilmaydi
+  await db.prepare("UPDATE journals SET issn='03605442' WHERE name='Energy'").run();
+  st = await feeds.applyFeed(db, [disc('Energy', ['99999999'])], 'scopus', { nameOnlyMinWords: 3, fillIssn: false });
+  assert.equal(st.updated, 0); assert.equal((await q(db, 'Energy')).scopus_status, 'active');
+  // 3) ISSN mos: nom qisqa bo'lsa ham ishonchli
+  st = await feeds.applyFeed(db, [disc('Energy (old title)', ['03605442'])], 'scopus', { nameOnlyMinWords: 3, fillIssn: false });
+  assert.equal(st.updated, 1); assert.equal((await q(db, 'Energy')).scopus_status, 'discontinued');
+  // 4) Uzun (>=3 so'z) nom bo'yicha belgilanadi, lekin chiqarilganlar ro'yxatidan ISSN kiritilmaydi
+  st = await feeds.applyFeed(db, [disc('Education Sciences Journal Extra', ['22222222']), disc('Educational Research Review', ['22222222'])], 'scopus', { nameOnlyMinWords: 3, fillIssn: false });
+  assert.equal((await q(db, 'Educational Research Review')).scopus_status, 'discontinued');
+  assert.equal((await q(db, 'Educational Research Review')).issn, '');
+});
+
+test('migratsiya v4: eski noto‘g‘ri (umumiy nomli) "chiqib ketgan" belgilari qaytariladi', async () => {
+  const db = await freshDb();
+  const { setSetting } = require('../src/db');
+  const bad = await q(db, 'Medicine'), good = await q(db, 'Cypriot Journal of Educational Sciences');
+  for (const [j, issn] of [[bad, '00257974'], [good, '13023059']]) {
+    await db.prepare("UPDATE journals SET scopus_status='discontinued', issn=? WHERE id=?").run(issn, j.id);
+    await db.prepare("INSERT INTO journal_changes(journal_id,field,old_value,new_value,source) VALUES(?,'scopus_status','active','discontinued','feed:scopus')").run(j.id);
+    await db.prepare("INSERT INTO journal_changes(journal_id,field,old_value,new_value,source) VALUES(?,'issn','',?,'feed:scopus')").run(j.id, issn);
+  }
+  await db.prepare("INSERT INTO users(login,pass_hash,role,full_name) VALUES('u','x','user','U')").run();
+  await db.prepare("INSERT INTO user_journals(user_id,journal_id,category,access,flag,flag_reason) VALUES(1,?,'scopus','paid','delisted','x')").run(bad.id);
+  await setSetting(db, 'seed_version', '3');
+  await seedAll(db);
+  const b = await q(db, 'Medicine'), g = await q(db, 'Cypriot Journal of Educational Sciences');
+  assert.equal(b.scopus_status, 'active'); assert.equal(b.issn, '');
+  assert.equal(g.scopus_status, 'discontinued'); // >=3 so'zli nom — qoladi
+  assert.equal((await db.prepare('SELECT flag FROM user_journals WHERE journal_id=?').get(bad.id)).flag, '');
+  assert.ok(await db.prepare("SELECT 1 x FROM journal_changes WHERE journal_id=? AND source='migration'").get(bad.id));
+});
+
+test('admin importi: SCImago to‘liq CSV tez skaner orqali qo‘llanadi', async () => {
+  const db = await freshDb();
+  const r = await feeds.applyScimagoText(db, scimagoCsv());
+  assert.equal(r.rows, 154); assert.ok(feeds.isScimagoCsv(scimagoCsv()));
+  assert.equal((await q(db, 'Computers & Education')).quartile, 'Q2');
+  assert.ok(!feeds.isScimagoCsv('name,issn\nX,1'));
+});
