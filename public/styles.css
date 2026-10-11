@@ -56,3 +56,5 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{padding:8px 10px;
 .subcard{background:var(--bg);border-radius:10px;padding:12px 14px;margin:8px 0}.subcard ul{margin:6px 0 0;padding-left:20px}.subcard li{margin:4px 0}
 .stepper{counter-reset:s;list-style:none;padding:0;margin:10px 0}.stepper li{counter-increment:s;position:relative;padding:8px 0 12px 46px;border-left:2px solid var(--line);margin-left:15px}
 .stepper li::before{content:counter(s);position:absolute;left:-16px;top:6px;width:30px;height:30px;border-radius:50%;background:var(--brand);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center}
+
+@media print{header.top,.noprint,.toast,.modal,button,.tabs{display:none!important}body{background:#fff;color:#000}.card{border:0;box-shadow:none;padding:0}.month{break-inside:avoid}main{max-width:none;padding:0}.task input{display:inline-block}a{color:#000;text-decoration:none}}

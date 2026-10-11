@@ -30,6 +30,10 @@ function coerce(col, v) {
   if (REALS.has(col)) { const n = parseFloat(v); if (Number.isNaN(n)) throw bad(`${col} son bo'lishi kerak`); return n; }
   return String(v);
 }
+const PUB_KINDS = ['oak', 'foreign', 'conf_int', 'conf_nat', 'other'];
+const PUB_STATUS = ['draft', 'submitted', 'review', 'revision', 'accepted', 'published', 'rejected'];
+const IN_PROGRESS = ['submitted', 'review', 'revision', 'accepted'];
+const validDate = (s) => s === '' || (/^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s)));
 const dayNumber = () => Math.floor(Date.now() / 864e5);
 
 function createHandler(db) {
@@ -151,6 +155,8 @@ function createHandler(db) {
       m = { text };
     }
     const alerts = [];
+    const ps = await pubSummary(ctx.user.id, uc.requirements);
+    for (const p of ps.slow.slice(0, 3)) alerts.push({ level: 'amber', text: `«${p.title}» ${p.weeks} hafta oldin yuborilgan (jurnalning odatdagi muddati ≈ ${Math.round(p.limit / 1.5)} hafta). Tahririyatga muloyim eslatma xati yuborishni o'ylab ko'ring.` });
     const flagged = (await db.prepare("SELECT COUNT(*) c FROM user_journals WHERE user_id=? AND flag!=''").get(ctx.user.id)).c;
     if (flagged) alerts.push({ level: 'red', text: `Tavsiya etilgan ${flagged} ta jurnalda o'zgarish aniqlangan (kvartil pasaygan yoki ro'yxatdan chiqqan). «Jurnallar» bo'limida ko'ring.` });
     if (overdue.length) alerts.push({ level: 'amber', text: `${overdue.length} ta vazifa rejadagi muddatdan kechikmoqda. Birinchisi: «${overdue[0].title}» (${overdue[0].month}).` });
@@ -160,6 +166,7 @@ function createHandler(db) {
       name: ctx.user.full_name, quote, motivation: m.text, aiEnabled: ai.enabled(),
       progress: uc.progress, daysLeft, currentMonth: curMonth?.label, thisMonth: curMonth?.tasks.map((t) => ({ ...t, done: uc.doneKeys.has(t.key) })) || [],
       next, alerts, requirements: requirementStatus(uc), profile: uc.profile, direction: uc.direction,
+      pubs: { byKind: ps.byKind, totalNeeded: ps.totalNeeded, publishedAll: ps.publishedAll, total: ps.pubs.length },
     };
   });
 
@@ -197,6 +204,122 @@ function createHandler(db) {
       .map((d) => ({ ...d, cancelled: !!d.cancelled_from && uc.plan.endIso >= d.cancelled_from, taskKey: `doc-${d.key}`, done: uc.doneKeys.has(`doc-${d.key}`), plannedMonth: monthOf.get(d.key) || null }));
     const hints = String(uc.direction?.hints || '').split('|').filter(Boolean);
     return { docs, hints, requirements: requirementStatus(uc), direction: uc.direction, newRegime: uc.plan.newRegime };
+  });
+
+  // ---------- Nashrlarim ----------
+  async function pubSummary(userId, requirements) {
+    const pubs = await db.prepare(`SELECT p.*, j.review_weeks FROM publications p LEFT JOIN journals j ON j.id=p.journal_id WHERE p.user_id=? ORDER BY p.id DESC`).all(userId);
+    const kinds = requirements.filter((r) => PUB_KINDS.includes(r.kind) && r.kind !== 'other' && r.min_count > 0);
+    const byKind = kinds.map((r) => ({ kind: r.kind, title: r.title, min: r.min_count,
+      published: pubs.filter((p) => p.kind === r.kind && p.status === 'published').length,
+      inProgress: pubs.filter((p) => p.kind === r.kind && IN_PROGRESS.includes(p.status)).length }));
+    const totalNeeded = byKind.reduce((s, k) => s + k.min, 0);
+    const publishedAll = pubs.filter((p) => p.status === 'published').length;
+    const now = Date.now();
+    const slow = pubs.filter((p) => ['submitted', 'review', 'revision'].includes(p.status) && p.submitted_at).map((p) => {
+      const weeks = Math.floor((now - Date.parse(p.submitted_at)) / (7 * 864e5));
+      return { ...p, weeks, limit: Math.round((p.review_weeks || 12) * 1.5) };
+    }).filter((p) => p.weeks > p.limit);
+    return { pubs, byKind, totalNeeded, publishedAll, slow };
+  }
+
+  // Chop etilganda mos reja vazifasi avtomatik belgilanadi; holat o'zgarsa yoki o'chirilsa — qaytariladi
+  async function syncPubTask(userId, pub) {
+    if (pub.status !== 'published' && pub.task_key) {
+      await db.batch([['UPDATE user_tasks SET done=0, done_at=NULL WHERE user_id=? AND task_key=?', userId, pub.task_key], ['UPDATE publications SET task_key=? WHERE id=?', '', pub.id]]);
+      return;
+    }
+    if (pub.status === 'published' && !pub.task_key && pub.kind !== 'other') {
+      const uc = await userContext(userId);
+      if (!uc.profile) return;
+      const t = uc.plan.months.flatMap((m) => m.tasks).find((x) => x.kind === pub.kind && !uc.doneKeys.has(x.key));
+      if (t) await db.batch([[`INSERT INTO user_tasks(user_id,task_key,done,done_at) VALUES(?,?,1,datetime('now')) ON CONFLICT(user_id,task_key) DO UPDATE SET done=1, done_at=datetime('now')`, userId, t.key], ['UPDATE publications SET task_key=? WHERE id=?', t.key, pub.id]]);
+    }
+  }
+
+  async function pubInput(body, userId) {
+    const kind = PUB_KINDS.includes(body.kind) ? body.kind : null;
+    if (!kind) throw bad('Nashr turini tanlang');
+    const title = String(body.title || '').trim().slice(0, 300);
+    if (title.length < 3) throw bad('Maqola/tezis sarlavhasini kiriting');
+    const status = PUB_STATUS.includes(body.status) ? body.status : 'draft';
+    const submitted_at = String(body.submitted_at || ''), published_at = String(body.published_at || '');
+    if (!validDate(submitted_at) || !validDate(published_at)) throw bad('Sana YYYY-OO-KK ko‘rinishida bo‘lsin');
+    const url = String(body.url || '').trim();
+    if (url && !/^https?:\/\/\S+$/i.test(url)) throw bad('Havola http:// yoki https:// bilan boshlansin');
+    let journal_id = null, journal_name = String(body.journal_name || '').trim().slice(0, 200);
+    if (body.journal_id) {
+      const j = await db.prepare('SELECT id, name FROM journals WHERE id=?').get(Number(body.journal_id));
+      if (j) { journal_id = j.id; journal_name = j.name; }
+    }
+    return { kind, title, status, submitted_at, published_at, url, coauthors: String(body.coauthors || '').trim().slice(0, 300), note: String(body.note || '').trim().slice(0, 1000), journal_id, journal_name };
+  }
+
+  route('GET', '/api/publications', 'user', async (req, body, ctx) => {
+    const profile = await db.prepare('SELECT degree FROM profiles WHERE user_id=?').get(ctx.user.id);
+    const requirements = await db.prepare('SELECT * FROM requirements WHERE degree=? ORDER BY id').all(profile?.degree || 'phd');
+    const s = await pubSummary(ctx.user.id, requirements);
+    return { publications: s.pubs, byKind: s.byKind, totalNeeded: s.totalNeeded, publishedAll: s.publishedAll, slow: s.slow.map((p) => ({ id: p.id, title: p.title, weeks: p.weeks })) };
+  });
+
+  route('POST', '/api/publications', 'user', async (req, body, ctx) => {
+    const p = await pubInput(body, ctx.user.id);
+    const r = await db.prepare(`INSERT INTO publications(user_id,kind,title,journal_id,journal_name,status,submitted_at,published_at,url,coauthors,note) VALUES(?,?,?,?,?,?,?,?,?,?,?)`)
+      .run(ctx.user.id, p.kind, p.title, p.journal_id, p.journal_name, p.status, p.submitted_at, p.published_at, p.url, p.coauthors, p.note);
+    await syncPubTask(ctx.user.id, { id: r.lastInsertRowid, ...p, task_key: '' });
+    return { ok: true, id: r.lastInsertRowid };
+  });
+
+  route('PUT', '/api/publications/(\\d+)', 'user', async (req, body, ctx) => {
+    const id = Number(ctx.params[0]);
+    const cur = await db.prepare('SELECT * FROM publications WHERE id=? AND user_id=?').get(id, ctx.user.id);
+    if (!cur) throw new HttpError(404, 'Topilmadi');
+    const p = await pubInput(body, ctx.user.id);
+    await db.prepare(`UPDATE publications SET kind=?,title=?,journal_id=?,journal_name=?,status=?,submitted_at=?,published_at=?,url=?,coauthors=?,note=?,updated_at=datetime('now') WHERE id=? AND user_id=?`)
+      .run(p.kind, p.title, p.journal_id, p.journal_name, p.status, p.submitted_at, p.published_at, p.url, p.coauthors, p.note, id, ctx.user.id);
+    // Vazifa belgisi: tur yoki holat o'zgarsa eskisi qaytariladi, "chop etildi" bo'lsa mos vazifa belgilanadi
+    const keep = cur.task_key && p.kind === cur.kind && p.status === 'published';
+    if (cur.task_key && !keep) {
+      await db.batch([['UPDATE user_tasks SET done=0, done_at=NULL WHERE user_id=? AND task_key=?', ctx.user.id, cur.task_key], ['UPDATE publications SET task_key=? WHERE id=?', '', id]]);
+    }
+    await syncPubTask(ctx.user.id, { id, ...p, task_key: keep ? cur.task_key : '' });
+    return { ok: true };
+  });
+
+  route('DELETE', '/api/publications/(\\d+)', 'user', async (req, body, ctx) => {
+    const id = Number(ctx.params[0]);
+    const cur = await db.prepare('SELECT * FROM publications WHERE id=? AND user_id=?').get(id, ctx.user.id);
+    if (!cur) throw new HttpError(404, 'Topilmadi');
+    if (cur.task_key) await db.prepare('UPDATE user_tasks SET done=0, done_at=NULL WHERE user_id=? AND task_key=?').run(ctx.user.id, cur.task_key);
+    await db.prepare('DELETE FROM publications WHERE id=? AND user_id=?').run(id, ctx.user.id);
+    return { ok: true };
+  });
+
+  // ---------- Barcha jurnallarni qidirish (katalog) ----------
+  route('GET', '/api/catalog', 'user', async (req, body, ctx) => {
+    const { q = '', type = 'all', access = '', quartile = '' } = ctx.query;
+    const page = Math.max(1, parseInt(ctx.query.page, 10) || 1), size = Math.min(50, parseInt(ctx.query.size, 10) || 30);
+    const term = `%${q.trim().replace(/[%_]/g, '')}%`;
+    let rows = q.trim()
+      ? await db.prepare('SELECT * FROM journals WHERE name LIKE ? OR publisher LIKE ? OR subjects LIKE ? OR issn LIKE ? ORDER BY name').all(term, term, term, term)
+      : await db.prepare('SELECT * FROM journals ORDER BY name').all();
+    if (rec.CATEGORIES.includes(type)) rows = rows.filter((j) => rec.matchesCategory(j, type));
+    if (['free', 'paid'].includes(access)) rows = rows.filter((j) => j.access === access);
+    if (/^Q[1-4]$/.test(quartile)) rows = rows.filter((j) => j.quartile === quartile);
+    const total = rows.length;
+    const items = rows.slice((page - 1) * size, page * size).map((j) => ({ ...j, category: j.kind === 'conference' ? 'conference' : j.scopus_status !== 'none' ? 'scopus' : j.oak_status !== 'none' ? 'oak' : 'impact_lite' }));
+    return { items, total, page, pages: Math.max(1, Math.ceil(total / size)) };
+  });
+
+  // ---------- Hisob: parolni o'zgartirish ----------
+  route('POST', '/api/account/password', 'public', async (req, body, ctx) => {
+    if (!ctx.user) throw new HttpError(401, 'Tizimga kiring');
+    const u = await db.prepare('SELECT * FROM users WHERE id=?').get(ctx.user.id);
+    if (!(await auth.verifyPassword(String(body.current || ''), u.pass_hash))) throw new HttpError(400, 'Joriy parol noto‘g‘ri');
+    const pw = String(body.password || '');
+    if (pw.length < 8) throw bad('Yangi parol kamida 8 belgidan iborat bo‘lsin');
+    await db.batch([['UPDATE users SET pass_hash=? WHERE id=?', await auth.hashPassword(pw), u.id], ['DELETE FROM sessions WHERE user_id=? AND token != ?', u.id, ctx.token || '']]);
+    return { ok: true };
   });
 
   route('GET', '/api/journals', 'user', async (req, body, ctx) => {
@@ -292,6 +415,16 @@ function createHandler(db) {
         return { ...u, progress };
       }),
     };
+  });
+
+  route('POST', '/api/admin/users/(\\d+)/password', 'admin', async (req, body, ctx) => {
+    const pw = String(body.password || '');
+    if (pw.length < 8) throw bad('Parol kamida 8 belgidan iborat bo‘lsin');
+    const id = Number(ctx.params[0]);
+    const u = await db.prepare("SELECT id FROM users WHERE id=? AND role='user'").get(id);
+    if (!u) throw new HttpError(404, 'Foydalanuvchi topilmadi');
+    await db.batch([['UPDATE users SET pass_hash=? WHERE id=?', await auth.hashPassword(pw), id], ['DELETE FROM sessions WHERE user_id=?', id]]);
+    return { ok: true };
   });
 
   route('DELETE', '/api/admin/users/(\\d+)', 'admin', async (req, body, ctx) => {

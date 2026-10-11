@@ -83,6 +83,12 @@ oldinga, uzoq ko'rib chiqiladigan Scopus maqolalari o'rtaga, qo'llanma/monografi
 **Scopus / OAK / Impakt faktor / Konferensiyalar** — har biri Bepul va Pullik, har bir yo'nalish uchun 10 tagacha tavsiya:
 kvartil, boshlangan yil, rasmiy sayt, indekslanganlik isboti havolasi, AI moslik tahlili.
 
+**Nashrlarim:** tadqiqotchi o'z maqola va tezislarini kiritib, holatini kuzatadi (tayyorlanmoqda → yuborildi → ko'rib chiqilmoqda → revision → qabul → chop etildi / rad etildi), jurnalni katalogdan tanlaydi, DOI/havola va hammualliflarni saqlaydi. OAK minimal talablari bo'yicha **real** hisob ko'rsatiladi (masalan, «Chop etilgan ishlar: 3 / 7»); «Chop etildi» holatida trayektoriyadagi mos vazifa avtomatik belgilanadi (holat qaytarilsa yoki nashr o'chirilsa — belgi olinadi). Jurnalning odatdagi muddatidan 1,5 baravar uzoq kutilayotgan maqolalar uchun bosh sahifada eslatma chiqadi.
+
+**Katalog:** barcha jurnallar bo'yicha qidiruv (nom, nashriyot, mavzu, ISSN) va filtrlar (Scopus / OAK / impakt / arzon / konferensiya, bepul-pullik, kvartil); jurnal ustiga bosilsa batafsil oyna ochiladi.
+
+**Hisob:** foydalanuvchi parolini o'zgartira oladi (🔑); admin foydalanuvchi parolini tiklaydi (eski sessiyalar tugatiladi). Trayektoriyani «🖨 Chop etish / PDF» tugmasi bilan chop etish mumkin.
+
 **Jurnal batafsil oynasi:** istalgan tavsiya etilgan jurnal (yoki konferensiya) ustiga bosilganda: to'liq ma'lumot va indeks isboti havolalari, maqolani tayyorlash/rasmiylashtirish tavsiyalari (OAK, Scopus/WoS, arzon nashrlar uchun alohida bo'limlar) va yuborishning bosqichma-bosqich yo'riqnomasi (14 bosqich: indeksni tekshirish → yuborish tizimi → peer review → revision → to'lov → chop etish → nashrdan keyingi hujjatlar). AI kaliti bo'lsa, foydalanuvchi mavzusiga moslashtirilgan AI maslahat ham olish mumkin.
 
 **Arzon impakt (Scopus'siz):** Scopus'da indekslanmagan, Web of Science (ESCI/JCR) yoki muqobil IF manbasi bor, bepul yoki nashr to'lovi ≤ 600 USD bo'lgan nashrlar. OAK muqobil «impakt faktor» xizmatlarini (SJIF, GIF va h.k.) tan olmaydi — bunday jurnallar qizil belgi va ogohlantirish bilan ko'rsatiladi.

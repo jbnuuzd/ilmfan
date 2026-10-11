@@ -128,6 +128,24 @@ CREATE TABLE IF NOT EXISTS quotes (
   text TEXT NOT NULL,
   note TEXT NOT NULL DEFAULT ''
 );
+CREATE TABLE IF NOT EXISTS publications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,                           -- oak | foreign | conf_int | conf_nat | other
+  title TEXT NOT NULL,
+  journal_id INTEGER REFERENCES journals(id) ON DELETE SET NULL,
+  journal_name TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'draft',         -- draft | submitted | review | revision | accepted | published | rejected
+  submitted_at TEXT NOT NULL DEFAULT '',        -- YYYY-MM-DD
+  published_at TEXT NOT NULL DEFAULT '',
+  url TEXT NOT NULL DEFAULT '',
+  coauthors TEXT NOT NULL DEFAULT '',
+  note TEXT NOT NULL DEFAULT '',
+  task_key TEXT NOT NULL DEFAULT '',            -- chop etilganda avtomatik belgilangan reja vazifasi
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS publications_user_idx ON publications(user_id);
 CREATE TABLE IF NOT EXISTS journal_advice (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   journal_id INTEGER NOT NULL REFERENCES journals(id) ON DELETE CASCADE,
