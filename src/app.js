@@ -10,6 +10,10 @@ const feeds = require('./feeds');
 const planner = require('./planner');
 const { buildGuide } = require('./guide');
 const thesis = require('./thesis');
+const I18N = require('../public/i18n.js');
+// Rus tili: server javoblari (xabarlar, qo'llanmalar, boshlang'ich kontent) lug'at orqali tarjima qilinadi
+const RU = I18N.createTranslator([require('../public/i18n-ru-ui.js'), require('../public/i18n-ru-content.js'), require('../public/i18n-ru-data.js')]);
+const pick = (lang, uz, ru) => (lang === 'ru' ? ru : uz);
 const { knowledge } = require('./knowledge');
 
 class HttpError extends Error { constructor(status, message) { super(message); this.status = status; } }
@@ -145,10 +149,10 @@ function createHandler(db) {
     const next = overdue[0] || pending[0] || null;
     const daysLeft = Math.ceil((new Date(`${uc.plan.endIso}T00:00:00Z`).getTime() - Date.now()) / 864e5);
     const day = new Date().toISOString().slice(0, 10);
-    const mkey = `${day}:${uc.progress.pct}`;
+    const mkey = `${day}:${uc.progress.pct}${ctx.lang === 'ru' ? ':ru' : ''}`;
     let m = await db.prepare('SELECT text FROM motivations WHERE user_id=? AND day=?').get(ctx.user.id, mkey);
     if (!m) {
-      const text = await ai.motivation({ name: ctx.user.full_name, progressPct: uc.progress.pct, daysLeft, topic: uc.profile.topic, doneTasks: uc.progress.tasksDone, totalTasks: uc.progress.tasksTotal, nextTask: next?.title });
+      const text = await ai.motivation({ name: ctx.user.full_name, progressPct: uc.progress.pct, daysLeft, topic: uc.profile.topic, doneTasks: uc.progress.tasksDone, totalTasks: uc.progress.tasksTotal, nextTask: ctx.tr(next?.title), lang: ctx.lang });
       await db.batch([
         ['INSERT OR REPLACE INTO motivations(user_id,day,text) VALUES(?,?,?)', ctx.user.id, mkey, text],
         ['DELETE FROM motivations WHERE user_id=? AND day != ? AND day NOT LIKE ?', ctx.user.id, mkey, `${day}:%`],
@@ -179,7 +183,7 @@ function createHandler(db) {
     const months = uc.plan.months.map((m) => ({ ...m, current: m.index - 1 === idx, tasks: m.tasks.map((t) => ({ ...t, done: uc.doneKeys.has(t.key) })) }));
     const reqs = requirementStatus(uc);
     const summary = reqs.map((r) => `${r.title}: ${r.min_count} ta`).join('; ');
-    const advice = ai.enabled() ? await ai.ask('Siz ilmiy maslahatchisiz. Faqat o‘zbek tilida qisqa yozing.', `Yo'nalish: ${uc.direction?.name}. Mavzu: ${uc.profile.topic}. Muddat: ${uc.profile.months} oy. Talablar: ${summary}. 3 ta qisqa amaliy maslahat bering.`, { maxTokens: 350 }) : null;
+    const advice = ai.enabled() ? await ai.ask(ai.sys(ctx.lang), pick(ctx.lang, `Yo'nalish: ${uc.direction?.name}. Mavzu: ${uc.profile.topic}. Muddat: ${uc.profile.months} oy. Talablar: ${summary}. 3 ta qisqa amaliy maslahat bering.`, `Направление: ${ctx.tr(uc.direction?.name)}. Тема: ${uc.profile.topic}. Срок: ${uc.profile.months} мес. Требования: ${ctx.tr(summary)}. Дайте 3 коротких практических совета.`), { maxTokens: 350 }) : null;
     return { months, warnings: uc.plan.warnings, progress: uc.progress, requirements: reqs, profile: uc.profile, advice, startMonth: uc.plan.startMonth };
   });
 
@@ -360,13 +364,15 @@ function createHandler(db) {
     const b = bandOf(ctx.params[0]);
     const tc = await thesisContext(ctx.user.id);
     if (!tc) throw bad('Avval profilni to‘ldiring');
-    const info = { topic: tc.profile.topic, direction: tc.direction?.name };
-    if (!ai.enabled()) return { draft: thesis.templateDraft(b, info), ai: false };
+    const info = { topic: tc.profile.topic, direction: ctx.tr(tc.direction?.name) };
+    const bT = { ...b, title: ctx.tr(b.title), hint: ctx.tr(b.hint) };
+    if (!ai.enabled()) return { draft: thesis.templateDraft(bT, info, ctx.lang), ai: false };
     const ctxRows = await db.prepare("SELECT key, text FROM thesis_intro WHERE user_id=? AND key IN ('maqsad','obyekt','predmet','vazifalar') AND text!=''").all(ctx.user.id);
     const known = ctxRows.filter((r) => r.key !== b.key).map((r) => `${r.key}: ${r.text.slice(0, 500)}`).join('\n');
-    const text = await ai.ask("Siz ilmiy ishlar bo'yicha tajribali maslahatchisiz. Faqat o'zbek tilida (lotin), rasmiy ilmiy uslubda yozing. Raqam, statistika, qaror raqami, muallif va manbalarni TO'QIMANG — kerak joylarni [...] bilan belgilang.",
-      `Dissertatsiya mavzusi: ${info.topic}\nIxtisoslik: ${info.direction}\nDaraja: ${tc.profile.degree === 'dsc' ? 'DSc' : 'PhD'}\nKirish qismining bandi: «${b.title}»\nBandga ko'rsatma: ${b.hint}\n${known ? `Allaqachon yozilgan bandlar (izchillik uchun):\n${known}\n` : ''}\nShu band uchun 80–180 so'zlik QORALAMA yozing; foydalanuvchi uni tahrirlaydi.`, { maxTokens: 700, timeoutMs: 40000 });
-    if (!text) return { draft: thesis.templateDraft(b, info), ai: false, note: 'AI hozir javob bermadi — shablon berildi' };
+    const text = await ai.ask(pick(ctx.lang, "Siz ilmiy ishlar bo'yicha tajribali maslahatchisiz. Faqat o'zbek tilida (lotin), rasmiy ilmiy uslubda yozing. Raqam, statistika, qaror raqami, muallif va manbalarni TO'QIMANG — kerak joylarni [...] bilan belgilang.", "Вы — опытный консультант по научным работам. Пишите только по-русски, в официальном научном стиле. НЕ выдумывайте цифры, статистику, номера постановлений, авторов и источники — места, где они нужны, обозначайте как [...]."),
+      pick(ctx.lang, `Dissertatsiya mavzusi: ${info.topic}\nIxtisoslik: ${info.direction}\nDaraja: ${tc.profile.degree === 'dsc' ? 'DSc' : 'PhD'}\nKirish qismining bandi: «${b.title}»\nBandga ko'rsatma: ${b.hint}\n${known ? `Allaqachon yozilgan bandlar (izchillik uchun):\n${known}\n` : ''}\nShu band uchun 80–180 so'zlik QORALAMA yozing; foydalanuvchi uni tahrirlaydi.`,
+        `Тема диссертации: ${info.topic}\nСпециальность: ${info.direction}\nСтепень: ${tc.profile.degree === 'dsc' ? 'DSc' : 'PhD'}\nПункт введения: «${bT.title}»\nПодсказка к пункту: ${bT.hint}\n${known ? `Уже написанные пункты (для согласованности):\n${known}\n` : ''}\nНапишите ЧЕРНОВИК этого пункта на 80–180 слов; пользователь его отредактирует.`), { maxTokens: 700, timeoutMs: 40000 });
+    if (!text) return { draft: thesis.templateDraft(bT, info, ctx.lang), ai: false, note: 'AI hozir javob bermadi — shablon berildi' };
     return { draft: text, ai: true };
   });
 
@@ -374,13 +380,16 @@ function createHandler(db) {
     const tc = await thesisContext(ctx.user.id);
     if (!tc) throw bad('Avval profilni to‘ldiring');
     const [reqs, chapters] = await Promise.all([db.prepare('SELECT * FROM requirements WHERE degree=? ORDER BY id').all(tc.profile.degree), db.prepare('SELECT title FROM thesis_chapters WHERE user_id=? ORDER BY position, id').all(ctx.user.id)]);
-    let items = thesis.fallbackIdeas(tc.profile.topic, reqs, chapters), usedAi = false;
+    let items = thesis.fallbackIdeas(tc.profile.topic, reqs, chapters.map((c) => ({ ...c, title: ctx.tr(c.title) })), ctx.lang), usedAi = false;
     if (ai.enabled() && items.length) {
       const plan = items.map((it, i) => `${i + 1}. tur=${it.kind}`).join('; ');
-      const text = await ai.ask("Siz ilmiy ishlar bo'yicha tajribali maslahatchisiz. Faqat o'zbek tilida javob bering. Javobni FAQAT JSON massiv sifatida qaytaring.",
-        `Dissertatsiya mavzusi: ${tc.profile.topic}\nIxtisoslik: ${tc.direction?.name}\nDissertatsiya boblari: ${chapters.map((c) => c.title).join(' | ')}\nKerakli ilmiy ishlar (tartib va tur): ${plan}\n` +
+      const text = await ai.ask(pick(ctx.lang, "Siz ilmiy ishlar bo'yicha tajribali maslahatchisiz. Faqat o'zbek tilida javob bering. Javobni FAQAT JSON massiv sifatida qaytaring.", "Вы — опытный консультант по научным работам. Отвечайте только по-русски. Верните ответ ТОЛЬКО в виде JSON-массива."),
+        pick(ctx.lang, `Dissertatsiya mavzusi: ${tc.profile.topic}\nIxtisoslik: ${tc.direction?.name}\nDissertatsiya boblari: ${chapters.map((c) => c.title).join(' | ')}\nKerakli ilmiy ishlar (tartib va tur): ${plan}\n` +
         `Turlar: oak = OAK ro'yxatidagi milliy jurnal maqolasi; foreign = xorijiy Scopus/WoS maqolasi (sarlavhani ingliz tilida ham bering); conf_int = xalqaro konferensiya tezisi; conf_nat = respublika konferensiyasi tezisi.\n` +
-        `Har bir ish uchun mavzuga mos, bir-birini takrorlamaydigan, dissertatsiya boblaridan biriga tayangan g'oya bering. Format: [{"title":"...","kind":"oak|foreign|conf_int|conf_nat","chapter":"bob nomi","outline":"2-3 gaplik reja: muammo, usul, kutilayotgan natija"}]. Aniq natija/raqamlarni to'qimang.`, { maxTokens: 2500, timeoutMs: 60000 });
+        `Har bir ish uchun mavzuga mos, bir-birini takrorlamaydigan, dissertatsiya boblaridan biriga tayangan g'oya bering. Format: [{"title":"...","kind":"oak|foreign|conf_int|conf_nat","chapter":"bob nomi","outline":"2-3 gaplik reja: muammo, usul, kutilayotgan natija"}]. Aniq natija/raqamlarni to'qimang.`,
+        `Тема диссертации: ${tc.profile.topic}\nСпециальность: ${ctx.tr(tc.direction?.name)}\nГлавы диссертации: ${chapters.map((c) => ctx.tr(c.title)).join(' | ')}\nНеобходимые научные работы (порядок и тип): ${plan}\n` +
+        `Типы: oak = статья в национальном журнале из перечня ВАК; foreign = зарубежная статья в Scopus/WoS (заголовок дайте также по-английски); conf_int = тезисы международной конференции; conf_nat = тезисы республиканской конференции.\n` +
+        `Для каждой работы предложите идею, соответствующую теме, не повторяющую другие и опирающуюся на одну из глав диссертации. Формат: [{"title":"...","kind":"oak|foreign|conf_int|conf_nat","chapter":"название главы","outline":"план из 2–3 предложений: проблема, метод, ожидаемый результат"}]. Не выдумывайте конкретные результаты и цифры.`), { maxTokens: 2500, timeoutMs: 60000 });
       const arr = ai.extractJson(text);
       if (Array.isArray(arr)) {
         const ok = arr.filter((x) => x && typeof x.title === 'string' && x.title.length > 5).slice(0, items.length);
@@ -421,22 +430,29 @@ function createHandler(db) {
   });
 
   const icsEsc = (s) => String(s).replace(/\\/g, '\\\\').replace(/;/g, '\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
-  const fold = (line) => { const out = []; let rest = line; while (rest.length > 70) { out.push(rest.slice(0, 70)); rest = ' ' + rest.slice(70); } out.push(rest); return out.join('\r\n'); };
+  const enc = new TextEncoder();
+  // iCalendar: qator 75 BAYTdan oshmasin (kirill harflari 2 bayt) — qismlarga bo'linadi, davomi bo'sh joy bilan boshlanadi
+  const fold = (line) => {
+    const out = []; let cur = '', bytes = 0;
+    for (const ch of line) { const b = enc.encode(ch).length; if (bytes + b > 70) { out.push(cur); cur = ' '; bytes = 1; } cur += ch; bytes += b; }
+    out.push(cur);
+    return out.join('\r\n');
+  };
 
   // Bajarilmagan vazifalar — oy oxiri muddati bilan iCalendar fayli (Google/Apple/Outlook kalendariga qo'shish uchun)
   route('GET', '/api/plan.ics', 'user', async (req, body, ctx) => {
     const uc = await userContext(ctx.user.id);
     if (!uc.profile) throw bad('Avval profilni to‘ldiring');
     const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
-    const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Ilmiy yuksalish//UZ//', 'CALSCALE:GREGORIAN', 'X-WR-CALNAME:Ilmiy yuksalish — trayektoriya'];
+    const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Ilmiy yuksalish//UZ//', 'CALSCALE:GREGORIAN', fold(`X-WR-CALNAME:${ctx.lang === 'ru' ? 'Научный рост — траектория' : 'Ilmiy yuksalish — trayektoriya'}`)];
     uc.plan.months.forEach((m, i) => {
       const d = lastDay(uc.plan.startMonth, i).replace(/-/g, '');
       const next = new Date(Date.UTC(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8) + 1)).toISOString().slice(0, 10).replace(/-/g, '');
       for (const t of m.tasks) {
         if (uc.doneKeys.has(t.key)) continue;
         lines.push('BEGIN:VEVENT', `UID:${t.key}-u${ctx.user.id}@ilmiy-yuksalish`, `DTSTAMP:${stamp}`, `DTSTART;VALUE=DATE:${d}`, `DTEND;VALUE=DATE:${next}`,
-          fold(`SUMMARY:${icsEsc(`[${m.index}-oy muddati] ${t.title}`)}`), fold(`DESCRIPTION:${icsEsc(`Ilmiy yuksalish trayektoriyasi, ${m.label}. ${t.detail || ''}`)}`),
-          'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:Muddat yaqinlashmoqda', 'TRIGGER:-P5D', 'END:VALARM', 'END:VEVENT');
+          fold(`SUMMARY:${icsEsc(`[${m.index}${ctx.lang === 'ru' ? '-й месяц, срок' : '-oy muddati'}] ${ctx.tr(t.title)}`)}`), fold(`DESCRIPTION:${icsEsc(`${ctx.lang === 'ru' ? 'Траектория «Научный рост»' : 'Ilmiy yuksalish trayektoriyasi'}, ${ctx.tr(m.label)}. ${ctx.tr(t.detail || '')}`)}`),
+          'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${ctx.lang === 'ru' ? 'Срок приближается' : 'Muddat yaqinlashmoqda'}`, 'TRIGGER:-P5D', 'END:VALARM', 'END:VEVENT');
       }
     });
     lines.push('END:VCALENDAR');
@@ -473,7 +489,7 @@ function createHandler(db) {
   route('GET', '/api/journals', 'user', async (req, body, ctx) => {
     const { category, access } = ctx.query;
     if (!rec.CATEGORIES.includes(category) || !['free', 'paid'].includes(access)) throw bad('category/access noto‘g‘ri');
-    const r = await rec.ensureRecommendations(db, ctx.user.id, category, access);
+    const r = await rec.ensureRecommendations(db, ctx.user.id, category, access, ctx.lang);
     if (r.needProfile) return { needProfile: true };
     const items = await rec.list(db, ctx.user.id, category, access);
     const log = await db.prepare('SELECT summary, created_at FROM refresh_log WHERE user_id=? AND category=? AND access=? ORDER BY id DESC LIMIT 1').get(ctx.user.id, category, access);
@@ -483,7 +499,7 @@ function createHandler(db) {
   route('POST', '/api/journals/refresh', 'user', async (req, body, ctx) => {
     const { category, access } = body;
     if (!rec.CATEGORIES.includes(category) || !['free', 'paid'].includes(access)) throw bad('category/access noto‘g‘ri');
-    const res = await rec.refresh(db, ctx.user.id, category, access, { syncFeeds: () => feeds.syncConfiguredFeeds(db, { quiet: true }) });
+    const res = await rec.refresh(db, ctx.user.id, category, access, { syncFeeds: () => feeds.syncConfiguredFeeds(db, { quiet: true }), lang: ctx.lang });
     if (res.needProfile) throw bad('Avval profilni to‘ldiring');
     return res;
   });
@@ -506,9 +522,11 @@ function createHandler(db) {
     if (!j) throw new HttpError(404, 'Jurnal topilmadi');
     const { profile, direction } = await rec.getProfileCtx(db, ctx.user.id);
     if (!profile) throw bad('Avval profilni to‘ldiring');
-    const text = await ai.ask("Siz tajribali ilmiy maslahatchisiz. Faqat o'zbek tilida, aniq va amaliy yozing. Bilmagan faktlarni to'qimang; jurnalning rasmiy 'Guide for Authors' hujjati ustuvorligini eslatib o'ting.",
-      `Tadqiqotchi yo'nalishi: ${direction?.code} ${direction?.name}. Mavzu: ${profile.topic}. Jurnal: ${j.name} (${j.publisher}; kvartil: ${j.quartile || 'yo\'q'}; teglar: ${j.subjects}). ` +
-      `Shu jurnalga maqola yuborish uchun: 1) mavzuni jurnal doirasiga qanday moslashtirish, 2) maqolaning aniq sarlavha/tuzilma g'oyasi, 3) rad etilish xavflari va ularni kamaytirish — 6-8 qisqa band bilan yozing.`, { maxTokens: 700, timeoutMs: 40000 });
+    const text = await ai.ask(pick(ctx.lang, "Siz tajribali ilmiy maslahatchisiz. Faqat o'zbek tilida, aniq va amaliy yozing. Bilmagan faktlarni to'qimang; jurnalning rasmiy 'Guide for Authors' hujjati ustuvorligini eslatib o'ting.", "Вы — опытный научный консультант. Пишите только по-русски, чётко и практично. Не выдумывайте факты, которых не знаете; напомните, что официальный документ журнала «Guide for Authors» приоритетен."),
+      pick(ctx.lang, `Tadqiqotchi yo'nalishi: ${direction?.code} ${direction?.name}. Mavzu: ${profile.topic}. Jurnal: ${j.name} (${j.publisher}; kvartil: ${j.quartile || 'yo\'q'}; teglar: ${j.subjects}). ` +
+      `Shu jurnalga maqola yuborish uchun: 1) mavzuni jurnal doirasiga qanday moslashtirish, 2) maqolaning aniq sarlavha/tuzilma g'oyasi, 3) rad etilish xavflari va ularni kamaytirish — 6-8 qisqa band bilan yozing.`,
+      `Направление исследователя: ${direction?.code} ${ctx.tr(direction?.name)}. Тема: ${profile.topic}. Журнал: ${j.name} (${j.publisher}; квартиль: ${j.quartile || 'нет'}; теги: ${j.subjects}). ` +
+      `Для подачи статьи в этот журнал опишите в 6–8 коротких пунктах: 1) как адаптировать тему под тематику журнала, 2) конкретную идею заголовка и структуры статьи, 3) риски отклонения и как их снизить.`), { maxTokens: 700, timeoutMs: 40000 });
     if (!text) throw new HttpError(502, 'AI hozir javob bera olmadi, keyinroq urinib ko‘ring (admin panelida «AI ni sinash» xato sababini ko‘rsatadi)');
     await db.prepare('INSERT OR REPLACE INTO journal_advice(user_id,journal_id,text) VALUES(?,?,?)').run(ctx.user.id, j.id, text);
     return { advice: text };
@@ -681,12 +699,15 @@ function createHandler(db) {
   return async function handle(request) {
     const url = new URL(request.url);
     const headers = new Headers({ ...SEC, 'content-type': 'application/json; charset=utf-8' });
-    const json = (status, obj) => new Response(JSON.stringify(obj), { status, headers });
+    const ruCookie = /(?:^|;\s*)lang=ru(?:;|$)/.test(request.headers.get('cookie') || '');
+    // admin paneli o'zbekcha qoladi; xato xabarlari esa har doim foydalanuvchi tilida
+    const json = (status, obj) => new Response(JSON.stringify(ruCookie && (status >= 400 || !url.pathname.startsWith('/api/admin/')) ? RU.deep(obj) : obj), { status, headers });
     try {
       const cookies = parseCookies(request.headers.get('cookie'));
       const secure = url.protocol === 'https:' ? '; Secure' : '';
       const ctx = {
         token: cookies.sid, user: await auth.userFromToken(db, cookies.sid), query: Object.fromEntries(url.searchParams), params: [],
+        lang: cookies.lang === 'ru' ? 'ru' : 'uz', tr: (s) => (cookies.lang === 'ru' ? RU.tr(s) : s),
         ip: request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'local',
         setCookie: ({ token, maxAge }) => headers.append('set-cookie', `sid=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAge}${secure}`),
         clearCookie: () => headers.append('set-cookie', `sid=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${secure}`),

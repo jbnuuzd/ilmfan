@@ -328,4 +328,4 @@ async function seedAll(db) {
   await setSetting(db, 'seed_version', SEED_VERSION);
 }
 
-module.exports = { seedAll, directions, journals };
+module.exports = { seedAll, directions, journals, docs, requirements, quotes };

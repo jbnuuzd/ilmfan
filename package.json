@@ -10,7 +10,9 @@
     "start": "node --no-warnings server.js",
     "test": "node --no-warnings --test test/*.test.js",
     "dev:cf": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "i18n": "node tools/build-i18n.js",
+    "i18n:missing": "node tools/i18n-missing.js"
   },
   "license": "MIT",
   "devDependencies": {

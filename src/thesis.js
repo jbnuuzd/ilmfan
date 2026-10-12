@@ -37,7 +37,20 @@ function defaultChapters(degree) {
 }
 
 /** AI ulanmaganda: bandga shablon (foydalanuvchi tahrirlaydi) */
-function templateDraft(band, { topic, direction }) {
+function templateDraft(band, { topic, direction }, lang = 'uz') {
+  if (lang === 'ru') {
+    const tr = topic || 'тема исследования';
+    const R = {
+      dolzarb: `Актуальность темы «${tr}» определяется реформами, проводимыми в последние годы в сфере «${direction || 'соответствующей области'}». Напишите: (1) современное состояние проблемы и числовые показатели; (2) соответствующие постановления и программы (название, дата); (3) практическую потребность и нерешённые вопросы.`,
+      maqsad: `Цель исследования — разработать теоретико-методические основы по теме «${tr}», обосновать механизм их внедрения в практику и доказать эффективность в ходе опытно-экспериментальной работы.`,
+      vazifalar: `Задачи исследования:\n1) проанализировать теоретические и нормативные источники по теме, уточнить основные понятия;\n2) выявить существующее состояние и проблемы на основе эмпирического анализа;\n3) разработать модель/методику по теме «${tr}»;\n4) апробировать разработанный подход в опытно-экспериментальной работе и статистически оценить его эффективность;\n5) подготовить практические рекомендации и предложения.`,
+      obyekt: `Объект исследования — процесс, связанный с темой «${tr}», и его участники (укажите конкретную организацию и объём выборки).`,
+      predmet: `Предмет исследования — содержание, формы и методы объекта в аспекте темы «${tr}».`,
+      usullar: `В исследовании использованы теоретические (анализ, синтез, сравнение, моделирование) и эмпирические (наблюдение, анкетирование, беседа, опытно-экспериментальная работа, математико-статистическая обработка) методы.`,
+      yangilik: `Научная новизна исследования:\n— впервые разработан(о) ...;\n— усовершенствованы критерии и показатели ...;\n— обоснована и доказана эффективность модели/методики ....`,
+    };
+    return R[band.key] || `${band.title} — ${band.hint}\n\n(Шаблона для этого пункта нет: напишите сами по подсказке выше или получите черновик, когда подключится ИИ.)`;
+  }
   const t = topic || 'tadqiqot mavzusi';
   const T = {
     dolzarb: `«${t}» masalasining dolzarbligi so'nggi yillarda ${direction || 'tegishli soha'}da amalga oshirilayotgan islohotlar bilan belgilanadi. Quyidagilarni yozing: (1) muammoning hozirgi holati va raqamli ko'rsatkichlar; (2) tegishli qaror/dasturlar (nomi, sanasi); (3) amaliyotdagi ehtiyoj va yechilmagan jihatlar.`,
@@ -51,8 +64,20 @@ function templateDraft(band, { topic, direction }) {
   return T[band.key] || `${band.title} — ${band.hint}\n\n(Bu band uchun shablon yo'q: yuqoridagi ko'rsatma bo'yicha o'zingiz yozing yoki AI ulangach qoralama oling.)`;
 }
 
-function ideaTemplates(topic) {
-  const t = topic || 'tadqiqot mavzusi';
+function ideaTemplates(topic, lang = 'uz') {
+  const t = topic || (lang === 'ru' ? 'тема исследования' : 'tadqiqot mavzusi');
+  if (lang === 'ru') {
+    return [
+      [`«${t}»: теоретико-методологические основы`, 'Глава I: теоретический анализ, понятия, классификация'],
+      [`${t}: анализ зарубежного опыта и адаптация к национальной практике`, 'Сравниваются зарубежные модели, оценивается их соответствие национальным условиям'],
+      [`Практические механизмы совершенствования: ${t}`, 'Глава II: анализ проблем и предлагаемый механизм'],
+      [`${t}: результаты опытно-экспериментальной работы (empirical results)`, 'Глава III: экспериментальная и контрольная группы, статистический анализ, выводы (рекомендуется писать на английском)'],
+      [`Критерии и показатели оценки эффективности: ${t}`, 'Критерии оценки, измерительные инструменты, анализ надёжности'],
+      [`Анализ результатов анкетирования по теме: ${t}`, 'Респонденты, выборка, основные выводы'],
+      [`Цифровые средства и возможности их использования: ${t}`, 'Технологические решения, их преимущества и ограничения'],
+      [`${t}: проблемы и перспективы развития`, 'Выводы и рекомендации, направления дальнейших исследований'],
+    ];
+  }
   return [
     [`«${t}»ning nazariy-metodologik asoslari`, 'I bob: nazariy tahlil, tushunchalar, tasniflash'],
     [`${t}: xorijiy tajriba tahlili va milliy amaliyotga moslashtirish`, 'Xorijiy modellar taqqoslanadi, milliy sharoitga moslik baholanadi'],
@@ -66,9 +91,9 @@ function ideaTemplates(topic) {
 }
 
 /** requirements (oak/foreign/conf_int/conf_nat) bo'yicha g'oyalar skeleti (AI bo'lmasa yoki to'ldirish uchun) */
-function fallbackIdeas(topic, requirements, chapters) {
-  const tpl = ideaTemplates(topic);
-  const chapterTitles = chapters.filter((c) => /bob/i.test(c.title)).map((c) => c.title);
+function fallbackIdeas(topic, requirements, chapters, lang = 'uz') {
+  const tpl = ideaTemplates(topic, lang);
+  const chapterTitles = chapters.filter((c) => /bob|глав/i.test(c.title)).map((c) => c.title);
   const out = [];
   let i = 0;
   for (const r of requirements) {

@@ -121,10 +121,20 @@ function extractJson(text) {
   try { return JSON.parse(m[0]); } catch { return null; }
 }
 
+const SYS_RU = "Вы — научный консультант платформы «Научный рост». Пишите только по-русски, кратко, точно и уважительно. Не выдумывайте факты, в которых не уверены.";
 const SYS = "Siz 'Ilmiy yuksalish' platformasining ilmiy maslahatchisisiz. Faqat o'zbek tilida (lotin yozuvi), qisqa, aniq va hurmat bilan yozing. Aniq bilmagan faktlarni to'qimang.";
 
-async function motivation({ name, progressPct, daysLeft, topic, doneTasks, totalTasks, nextTask }) {
-  const fallback = fallbackMotivation({ name, progressPct, daysLeft, nextTask });
+const sys = (lang) => (lang === 'ru' ? SYS_RU : SYS);
+
+async function motivation({ name, progressPct, daysLeft, topic, doneTasks, totalTasks, nextTask, lang = 'uz' }) {
+  const fallback = fallbackMotivation({ name, progressPct, daysLeft, nextTask, lang });
+  if (lang === 'ru') {
+    const textRu = await ask(SYS_RU,
+      `Напишите исследователю вдохновляющее сообщение из 2–3 предложений. Имя: ${name}. Тема: ${topic || 'не указана'}. Выполнение плана: ${progressPct}% (${doneTasks} из ${totalTasks} задач). ` +
+      `${daysLeft != null ? `До планового срока завершения осталось дней: ${daysLeft}.` : ''} ${nextTask ? `Ближайшая задача: ${nextTask}.` : ''} ` +
+      `Начните со слов «Уважаемый(ая) ${name},». Не сухие цифры, а искренне и с призывом к настойчивости.`, { maxTokens: 300 });
+    return textRu || fallback;
+  }
   const text = await ask(SYS,
     `Tadqiqotchiga 2-3 gapli ilhomlantiruvchi xabar yozing. Ism: ${name}. Mavzu: ${topic || 'kiritilmagan'}. ` +
     `Reja bajarilishi: ${progressPct}% (${doneTasks}/${totalTasks} vazifa). ` +
@@ -133,7 +143,11 @@ async function motivation({ name, progressPct, daysLeft, topic, doneTasks, total
   return text || fallback;
 }
 
-function fallbackMotivation({ name, progressPct, daysLeft, nextTask }) {
+function fallbackMotivation({ name, progressPct, daysLeft, nextTask, lang = 'uz' }) {
+  if (lang === 'ru') {
+    const toneRu = progressPct >= 80 ? 'Вы совсем близки к финишу — сделайте последние шаги внимательно и уверенно.' : progressPct >= 50 ? 'Вы прошли половину пути — теперь важно не сбавлять темп.' : progressPct >= 20 ? 'Хорошее начало. Маленький шаг каждый день к концу месяца даст большой результат.' : 'Любое великое исследование начинается с одного маленького шага. Сделайте этот шаг сегодня.';
+    return `Уважаемый(ая) ${name}, ваше научное исследование выполнено на ${progressPct}%. ${toneRu}` + (nextTask ? ` Ближайшая задача: «${nextTask}».` : '') + (daysLeft != null && daysLeft > 0 ? ` До планового срока осталось дней: ${daysLeft} — призываем вас трудиться ещё усерднее и добиваться высоких результатов!` : ' Призываем вас трудиться ещё усерднее ради успеха!');
+  }
   let tone;
   if (progressPct >= 80) tone = "Siz marraga juda yaqinsiz — oxirgi qadamlarni sinchiklab, ishonch bilan bosing.";
   else if (progressPct >= 50) tone = "Yo'lning yarmidan o'tdingiz — endi tezlikni pasaytirmaslik vaqti.";
@@ -145,13 +159,15 @@ function fallbackMotivation({ name, progressPct, daysLeft, nextTask }) {
 }
 
 /** Jurnal tadqiqotchi uchun qanchalik mos ekanligi: {score:0..100, text} */
-async function journalFits(profile, direction, items) {
+async function journalFits(profile, direction, items, lang = 'uz') {
   const result = new Map();
   for (const it of items) result.set(it.id, heuristicFit(profile, direction, it));
   if (!enabled() || !items.length) return result;
   const list = items.map((j) => ({ id: j.id, name: j.name, quartile: j.quartile, subjects: j.subjects, access: j.access, apc_usd: j.apc_usd, description: j.description, publisher: j.publisher }));
-  const text = await ask(SYS + ' Javobni FAQAT JSON massiv sifatida qaytaring.',
-    `Tadqiqotchi yo'nalishi: ${direction?.code} ${direction?.name}. Mavzu: ${profile.topic || 'kiritilmagan'}. ` +
+  const text = await ask(lang === 'ru' ? SYS_RU + ' Верните ответ ТОЛЬКО в виде JSON-массива.' : SYS + ' Javobni FAQAT JSON massiv sifatida qaytaring.',
+    lang === 'ru'
+      ? `Направление исследователя: ${direction?.code}. Тема: ${profile.topic || 'не указана'}. Для каждого из журналов ниже оцените соответствие теме по шкале 0–100 и дайте пояснение на русском в 1–2 предложения (почему подходит / не подходит, вероятность принятия, в каком ключе лучше писать). Не выдумывайте то, чего не знаете о журнале. Формат: [{"id":number,"score":number,"text":string}]\n${JSON.stringify(list)}`
+      : `Tadqiqotchi yo'nalishi: ${direction?.code} ${direction?.name}. Mavzu: ${profile.topic || 'kiritilmagan'}. ` +
     `Quyidagi jurnallarning har biri uchun mavzuga moslikni 0-100 ball bilan baholang va 1-2 gapli o'zbekcha izoh bering ` +
     `(nima uchun mos/mos emas, qabul ehtimoli, qaysi yo'nalishda yozish ma'qul). Jurnal haqida bilmaganingizni to'qimang. ` +
     `Format: [{"id":number,"score":number,"text":string}]\n${JSON.stringify(list)}`, { maxTokens: 2500, timeoutMs: 45000 });
@@ -170,8 +186,9 @@ function heuristicFit(profile, direction, j) {
   return { score, text: parts.join('; ').replace(/^./, (c) => c.toUpperCase()) + '. (Qoidaga asoslangan baho — AI kaliti ulanganda aniqlashtiriladi.)', ai: false };
 }
 
-async function summarizeChanges(lines) {
+async function summarizeChanges(lines, lang = 'uz') {
   if (!lines.length) return null;
+  if (lang === 'ru') return ask(SYS_RU, `Объясните исследователю в 2–3 предложениях следующие изменения журналов и посоветуйте, что делать:\n- ${lines.join('\n- ')}`, { maxTokens: 300 });
   return ask(SYS, `Tadqiqotchiga quyidagi jurnal o'zgarishlarini 2-3 gapda tushuntiring va nima qilishini maslahat bering:\n- ${lines.join('\n- ')}`, { maxTokens: 300 });
 }
 
@@ -187,4 +204,4 @@ async function extractJournals(rawText, hint) {
   return extractJson(text);
 }
 
-module.exports = { extractJson, info, test, lastAiError, config, enabled, motivation, journalFits, summarizeChanges, planAdvice, extractJournals, ask, fallbackMotivation };
+module.exports = { sys, extractJson, info, test, lastAiError, config, enabled, motivation, journalFits, summarizeChanges, planAdvice, extractJournals, ask, fallbackMotivation };

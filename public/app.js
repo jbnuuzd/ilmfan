@@ -4,11 +4,36 @@
 const $app = document.getElementById('app');
 const state = { user: null, meta: null };
 
+// ---------------- Til (uz / ru) ----------------
+// Matnlar o'zbekcha yoziladi; rus tilida h() qatlamida lug'at (public/i18n-ru-*.js) orqali tarjima qilinadi.
+// Server ham shu cookie bo'yicha javoblarni tarjima qiladi. Admin paneli faqat o'zbekcha.
+let LANG = (document.cookie.match(/(?:^|; )lang=(\w+)/) || [])[1] === 'ru' ? 'ru' : 'uz';
+let TR = null;
+const L = (s) => (LANG === 'ru' && TR && typeof s === 'string' ? TR.tr(s) : s);
+const confirmL = (m) => window.confirm(L(m));
+function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error(src)); document.head.append(s); }); }
+async function ensureDict() {
+  if (LANG !== 'ru' || TR) return;
+  try { await Promise.all(['/i18n-ru-ui.js', '/i18n-ru-content.js', '/i18n-ru-data.js'].map(loadScript)); TR = window.I18N.createTranslator(window.I18N_PARTS || []); }
+  catch { LANG = 'uz'; }
+  document.documentElement.lang = LANG;
+}
+async function setLang(l) {
+  LANG = l === 'ru' ? 'ru' : 'uz';
+  document.cookie = `lang=${LANG}; path=/; max-age=31536000; SameSite=Lax`;
+  document.documentElement.lang = LANG;
+  await ensureDict();
+  await boot();
+}
+const langButton = () => h('button', { class: 'noprint', title: 'Язык / Til', onclick: () => setLang(LANG === 'ru' ? 'uz' : 'ru') }, LANG === 'ru' ? '🇺🇿 O‘zbekcha' : '🇷🇺 Русский');
+
+
 function h(tag, attrs, ...kids) {
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs || {})) {
     if (v == null || v === false) continue;
     if (k === 'class') el.className = v;
+    else if (k === 'placeholder' || k === 'title' || k === 'aria-label') el.setAttribute(k, L(v));
     else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
     else if (k === 'value') el.value = v;
     else if (k === 'checked') el.checked = !!v;
@@ -16,7 +41,7 @@ function h(tag, attrs, ...kids) {
   }
   for (const kid of kids.flat(Infinity)) {
     if (kid == null || kid === false) continue;
-    el.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+    el.append(kid.nodeType ? kid : document.createTextNode(L(String(kid))));
   }
   return el;
 }
@@ -24,7 +49,7 @@ function h(tag, attrs, ...kids) {
 // replaceChildren massiv/null qabul qilmaydi — h() kabi tekislab joylaydi
 function fill(el, ...kids) {
   el.replaceChildren();
-  for (const kid of kids.flat(Infinity)) { if (kid == null || kid === false) continue; el.append(kid.nodeType ? kid : document.createTextNode(String(kid))); }
+  for (const kid of kids.flat(Infinity)) { if (kid == null || kid === false) continue; el.append(kid.nodeType ? kid : document.createTextNode(L(String(kid)))); }
 }
 
 async function api(path, opts = {}) {
@@ -60,7 +85,7 @@ function authView() {
       h('h1', {}, 'Ilmiy yuksalish'),
       h('p', { class: 'muted' }, "Tadqiqotchilar uchun: jurnallar, OAK talablari, shaxsiy trayektoriya va sun'iy intellekt ko'magi."),
       h('div', { class: 'tabs seg' },
-        h('button', { class: mode === 'login' ? 'on' : '', onclick: () => { mode = 'login'; draw(); } }, 'Kirish'),
+        h('button', { class: mode === 'login' ? 'on' : '', onclick: () => { mode = 'login'; draw(); } }, 'Tizimga kirish'),
         h('button', { class: mode === 'register' ? 'on' : '', onclick: () => { mode = 'register'; draw(); } }, "Ro'yxatdan o'tish")),
       mode === 'register' ? field('full_name', 'Ism-familiya (otasining ismi bilan)', 'text', 'name') : null,
       field('login', 'Login', 'text', 'username'),
@@ -71,12 +96,12 @@ function authView() {
         try {
           await api(mode === 'login' ? '/login' : '/register', { method: 'POST', body: { login: f.login.value, password: f.password.value, full_name: f.full_name?.value } });
           await boot();
-        } catch (x) { err.textContent = x.message; e.target.disabled = false; }
-      } }, mode === 'login' ? 'Kirish' : "Ro'yxatdan o'tish"));
+        } catch (x) { err.textContent = L(x.message); e.target.disabled = false; }
+      } }, mode === 'login' ? 'Tizimga kirish' : "Ro'yxatdan o'tish"));
     box.querySelectorAll('input').forEach((i) => i.addEventListener('keydown', (e) => { if (e.key === 'Enter') box.querySelector('button.primary').click(); }));
   };
   draw();
-  return h('main', {}, box, h('p', { class: 'muted small', style: 'text-align:center' }, state.meta?.notice || ''));
+  return h('main', {}, box, h('p', { style: 'text-align:center' }, langButton()), h('p', { class: 'muted small', style: 'text-align:center' }, state.meta?.notice || ''));
 }
 
 // ---------------- Layout ----------------
@@ -91,6 +116,7 @@ function layout(content) {
       h('a', { class: 'logo', href: state.user.role === 'admin' ? '#/admin' : '#/' }, '🎓 Ilmiy yuksalish'),
       h('nav', {}, nav.map(([href, label]) => h('a', { href, class: cur === href || (href.length > 3 && cur.startsWith(href + '/')) ? 'active' : '' }, label))),
       h('span', { class: 'muted small' }, state.user.full_name),
+      state.user.role === 'admin' ? null : langButton(),
       h('button', { class: 'noprint', title: 'Parolni o‘zgartirish', onclick: openPasswordModal }, '🔑'),
       h('button', { onclick: async () => { await api('/logout', { method: 'POST', body: {} }); state.user = null; location.hash = '#/'; render(); } }, 'Chiqish'))),
     h('main', {}, content));
@@ -161,7 +187,7 @@ async function profileView() {
     err, h('div', { style: 'margin-top:14px' }, h('button', { class: 'primary', onclick: async (e) => {
       e.target.disabled = true; err.textContent = '';
       try { await api('/profile', { method: 'PUT', body: { status: f.status.value, degree: f.degree.value, direction_code: f.dir.value, topic: f.topic.value, months: f.months.value, start_month: f.start.value } }); toast('Saqlandi'); location.hash = '#/plan'; }
-      catch (x) { err.textContent = x.message; e.target.disabled = false; }
+      catch (x) { err.textContent = L(x.message); e.target.disabled = false; }
     } }, 'Saqlash va trayektoriyani yaratish')));
 }
 
@@ -171,7 +197,7 @@ async function planView() {
   if (d.needProfile) return needProfile();
   const bar = h('div', { class: 'progress' }, h('i', { style: `width:${d.progress.pct}%` }));
   const pctEl = h('span', { class: 'big' }, `${d.progress.pct}%`);
-  const refreshProgress = async () => { const x = await api('/plan'); pctEl.textContent = `${x.progress.pct}%`; bar.firstChild.style.width = `${x.progress.pct}%`; };
+  const refreshProgress = async () => { const x = await api('/plan'); pctEl.textContent = L(`${x.progress.pct}%`); bar.firstChild.style.width = `${x.progress.pct}%`; };
   return h('div', {}, h('div', { class: 'jhead' }, h('h1', {}, `Shaxsiy trayektoriya — ${d.profile.months} oy`), h('div', { class: 'noprint', style: 'display:flex;gap:8px' }, h('a', { class: 'btn', href: '/api/plan.ics', download: 'ilmiy-yuksalish-trayektoriya.ics', title: 'Bajarilmagan vazifalarni kalendarga qo‘shish' }, '📅 Kalendarga (.ics)'), h('button', { onclick: () => window.print() }, '🖨 Chop etish / PDF'))),
     h('div', { class: 'card' }, pctEl, h('span', { class: 'muted' }, ' bajarilgan'), h('div', { style: 'margin-top:10px' }, bar)),
     d.warnings.map((w) => h('div', { class: 'alert amber' }, w)),
@@ -250,9 +276,9 @@ function chaptersTab(d, reload) {
       h('label', {}, 'Nomi'), f.title, h('div', { class: 'row2' }, h('div', {}, h('label', {}, 'Reja (varaq)'), f.target), h('div', {}, h('label', {}, 'Yozilgan (varaq)'), f.done)), h('label', {}, 'Holati'), f.status, h('label', {}, 'Izoh'), f.note, err,
       h('div', { style: 'display:flex;gap:8px;margin-top:14px' }, h('button', { class: 'primary', onclick: async () => {
         const body = { title: f.title.value, pages_target: f.target.value, pages_done: f.done.value, status: f.status.value, note: f.note.value };
-        try { await api(isNew ? '/thesis/chapters' : `/thesis/chapters/${c.id}`, { method: isNew ? 'POST' : 'PUT', body }); modal.remove(); reload(); } catch (x) { err.textContent = x.message; }
+        try { await api(isNew ? '/thesis/chapters' : `/thesis/chapters/${c.id}`, { method: isNew ? 'POST' : 'PUT', body }); modal.remove(); reload(); } catch (x) { err.textContent = L(x.message); }
       } }, 'Saqlash'), h('button', { onclick: () => modal.remove() }, 'Bekor qilish'),
-      isNew ? null : h('button', { class: 'danger', style: 'margin-left:auto', onclick: async () => { if (confirm("Bob o'chirilsinmi?")) { await api(`/thesis/chapters/${c.id}`, { method: 'DELETE', body: {} }); modal.remove(); reload(); } } }, "O'chirish"))));
+      isNew ? null : h('button', { class: 'danger', style: 'margin-left:auto', onclick: async () => { if (confirmL("Bob o'chirilsinmi?")) { await api(`/thesis/chapters/${c.id}`, { method: 'DELETE', body: {} }); modal.remove(); reload(); } } }, "O'chirish"))));
     document.body.append(modal);
   };
   return h('div', {},
@@ -268,19 +294,19 @@ function chaptersTab(d, reload) {
 function introTab(d) {
   const doneCount = () => d.bands.filter((b) => b.done).length;
   const counter = h('div', { class: 'small muted' });
-  const upd = () => { counter.textContent = `${doneCount()} / ${d.bands.length} band tayyor`; };
+  const upd = () => { counter.textContent = L(`${doneCount()} / ${d.bands.length} band tayyor`); };
   upd();
   return h('div', {}, h('p', { class: 'muted' }, "OAK nizomiga ko'ra kirish qismida quyidagi bandlar bo'lishi shart. Har bir band uchun ko'rsatma bor; «Qoralama olish» tugmasi AI yordamida (ulangan bo'lsa) yoki shablon bilan boshlang'ich matn beradi — uni o'zingiz tahrirlang."), counter,
     d.bands.map((b) => {
       const ta = h('textarea', { style: 'min-height:130px', placeholder: b.hint }, b.text);
       const cb = h('input', { type: 'checkbox', checked: b.done, style: 'width:auto' });
       const state = h('span', { class: 'small muted' });
-      const save = async () => { try { await api(`/thesis/intro/${b.key}`, { method: 'PUT', body: { text: ta.value, done: cb.checked } }); b.text = ta.value; b.done = cb.checked; state.textContent = 'saqlandi ✓'; upd(); sum.querySelector('.pill').className = `pill ${b.done ? 'green' : ''}`; sum.querySelector('.pill').textContent = b.done ? 'tayyor' : b.text ? 'qoralama' : 'bo‘sh'; } catch (x) { state.textContent = x.message; } };
+      const save = async () => { try { await api(`/thesis/intro/${b.key}`, { method: 'PUT', body: { text: ta.value, done: cb.checked } }); b.text = ta.value; b.done = cb.checked; state.textContent = L('saqlandi ✓'); upd(); sum.querySelector('.pill').className = `pill ${b.done ? 'green' : ''}`; sum.querySelector('.pill').textContent = b.done ? 'tayyor' : b.text ? 'qoralama' : 'bo‘sh'; } catch (x) { state.textContent = L(x.message); } };
       const draftBtn = h('button', { onclick: async (e) => {
-        if (ta.value.trim() && !confirm('Mavjud matn qoralama bilan almashtirilsinmi?')) return;
-        e.target.disabled = true; e.target.textContent = 'Tayyorlanmoqda…';
-        try { const r = await api(`/thesis/intro/${b.key}/draft`, { method: 'POST', body: {} }); ta.value = r.draft; state.textContent = r.ai ? '🤖 AI qoralamasi — tahrirlab, so‘ng saqlang' : (r.note || 'Shablon — tahrirlab saqlang'); } catch (x) { state.textContent = x.message; }
-        e.target.disabled = false; e.target.textContent = '✨ Qoralama olish';
+        if (ta.value.trim() && !confirmL('Mavjud matn qoralama bilan almashtirilsinmi?')) return;
+        e.target.disabled = true; e.target.textContent = L('Tayyorlanmoqda…');
+        try { const r = await api(`/thesis/intro/${b.key}/draft`, { method: 'POST', body: {} }); ta.value = r.draft; state.textContent = L(r.ai ? '🤖 AI qoralamasi — tahrirlab, so‘ng saqlang' : (r.note || 'Shablon — tahrirlab saqlang')); } catch (x) { state.textContent = L(x.message); }
+        e.target.disabled = false; e.target.textContent = L('✨ Qoralama olish');
       } }, '✨ Qoralama olish');
       const sum = h('summary', { style: 'cursor:pointer;font-weight:600;padding:8px 0' }, b.title, ' ', h('span', { class: `pill ${b.done ? 'green' : ''}` }, b.done ? 'tayyor' : b.text ? 'qoralama' : 'bo‘sh'));
       return h('details', { class: 'card', style: 'padding:6px 16px' }, sum, h('div', { class: 'small muted', style: 'margin-bottom:8px' }, b.hint), ta,
@@ -294,15 +320,15 @@ function ideasTab(d) {
     fill(box, !ideas ? h('div', { class: 'card muted' }, "Hali g'oya yaratilmagan. Tugmani bosing: OAK talab qilgan ishlar soniga (PhD uchun 7 ta) mos, dissertatsiya boblariga tayangan maqola va tezis mavzulari taklif qilinadi.") : [
       h('p', { class: 'small muted' }, ideas.ai ? "🤖 AI tomonidan mavzuingiz va boblaringiz asosida tuzildi." : "Shablon asosida tuzildi (AI ulanmagan yoki javob bermadi). Sarlavhalarni o'z mavzuingizga moslab tahrirlang."),
       ideas.items.map((it, i) => h('div', { class: 'card' }, h('div', { class: 'jhead' }, h('div', {}, h('span', { class: 'pill' }, PUB_KIND[it.kind] || it.kind), it.chapter ? h('span', { class: 'small muted' }, ` ${it.chapter}`) : null, h('h3', { style: 'margin-top:6px' }, it.title)),
-        h('button', { onclick: async (e) => { e.target.disabled = true; try { await api(`/thesis/ideas/${i}/publication`, { method: 'POST', body: {} }); e.target.textContent = '✓ Nashrlarimga qo‘shildi'; } catch (x) { toast(x.message); e.target.disabled = false; } } }, '+ Nashrlarimga qo‘shish')),
+        h('button', { onclick: async (e) => { e.target.disabled = true; try { await api(`/thesis/ideas/${i}/publication`, { method: 'POST', body: {} }); e.target.textContent = L('✓ Nashrlarimga qo‘shildi'); } catch (x) { toast(x.message); e.target.disabled = false; } } }, '+ Nashrlarimga qo‘shish')),
         h('div', { class: 'small' }, it.outline)))]);
   };
   show(d.ideas);
   return h('div', {}, h('button', { class: 'primary', style: 'margin-bottom:12px', onclick: async (e) => {
-    if (d.ideas && !confirm('Oldingi g‘oyalar yangilari bilan almashtirilsinmi?')) return;
-    e.target.disabled = true; e.target.textContent = 'G‘oyalar tayyorlanmoqda…';
+    if (d.ideas && !confirmL('Oldingi g‘oyalar yangilari bilan almashtirilsinmi?')) return;
+    e.target.disabled = true; e.target.textContent = L('G‘oyalar tayyorlanmoqda…');
     try { const r = await api('/thesis/ideas', { method: 'POST', body: {} }); d.ideas = r; show(r); } catch (x) { toast(x.message); }
-    e.target.disabled = false; e.target.textContent = d.ideas ? '🔄 Qayta yaratish' : '💡 G‘oyalarni yaratish';
+    e.target.disabled = false; e.target.textContent = L(d.ideas ? '🔄 Qayta yaratish' : '💡 G‘oyalarni yaratish');
   } }, d.ideas ? '🔄 Qayta yaratish' : '💡 G‘oyalarni yaratish'), box);
 }
 
@@ -314,8 +340,8 @@ function openPasswordModal() {
     h('h2', { style: 'margin-top:0' }, 'Parolni o‘zgartirish'), h('label', {}, 'Joriy parol'), f.cur, h('label', {}, 'Yangi parol (kamida 8 belgi)'), f.n1, h('label', {}, 'Yangi parolni takrorlang'), f.n2, err,
     h('div', { style: 'display:flex;gap:8px;margin-top:14px' }, h('button', { class: 'primary', onclick: async () => {
       err.textContent = '';
-      if (f.n1.value !== f.n2.value) { err.textContent = 'Yangi parollar mos kelmadi'; return; }
-      try { await api('/account/password', { method: 'POST', body: { current: f.cur.value, password: f.n1.value } }); modal.remove(); toast('Parol o‘zgartirildi (boshqa qurilmalardagi sessiyalar tugatildi)'); } catch (x) { err.textContent = x.message; }
+      if (f.n1.value !== f.n2.value) { err.textContent = L('Yangi parollar mos kelmadi'); return; }
+      try { await api('/account/password', { method: 'POST', body: { current: f.cur.value, password: f.n1.value } }); modal.remove(); toast('Parol o‘zgartirildi (boshqa qurilmalardagi sessiyalar tugatildi)'); } catch (x) { err.textContent = L(x.message); }
     } }, 'Saqlash'), h('button', { onclick: () => modal.remove() }, 'Bekor qilish'))));
   document.body.append(modal);
 }
@@ -357,9 +383,9 @@ async function publicationsView() {
       h('div', { style: 'display:flex;gap:8px;margin-top:14px' },
         h('button', { class: 'primary', onclick: async () => {
           const body = { kind: f.kind.value, title: f.title.value, journal_name: f.journal.value, journal_id: ids[f.journal.value] || (p && p.journal_name === f.journal.value ? p.journal_id : null), status: f.status.value, submitted_at: f.submitted.value, published_at: f.published.value, url: f.url.value, coauthors: f.coauthors.value, note: f.note.value };
-          try { await api(isNew ? '/publications' : `/publications/${p.id}`, { method: isNew ? 'POST' : 'PUT', body }); modal.remove(); render(); } catch (x) { err.textContent = x.message; }
+          try { await api(isNew ? '/publications' : `/publications/${p.id}`, { method: isNew ? 'POST' : 'PUT', body }); modal.remove(); render(); } catch (x) { err.textContent = L(x.message); }
         } }, 'Saqlash'), h('button', { onclick: () => modal.remove() }, 'Bekor qilish'),
-        isNew ? null : h('button', { class: 'danger', style: 'margin-left:auto', onclick: async () => { if (confirm("Nashr o'chirilsinmi?")) { await api(`/publications/${p.id}`, { method: 'DELETE', body: {} }); modal.remove(); render(); } } }, "O'chirish"))));
+        isNew ? null : h('button', { class: 'danger', style: 'margin-left:auto', onclick: async () => { if (confirmL("Nashr o'chirilsinmi?")) { await api(`/publications/${p.id}`, { method: 'DELETE', body: {} }); modal.remove(); render(); } } }, "O'chirish"))));
     document.body.append(modal);
   };
   return h('div', {}, h('div', { class: 'jhead' }, h('h1', {}, 'Mening nashrlarim'), h('button', { class: 'primary', onclick: () => edit(null) }, '+ Nashr qo‘shish')),
@@ -415,7 +441,7 @@ async function journalsView(category) {
       const d = await api(`/journals?category=${category}&access=${access}`);
       if (d.needProfile) return fill(wrap, needProfile());
       const refreshBtn = h('button', { class: 'primary', onclick: async () => {
-        refreshBtn.disabled = true; refreshBtn.textContent = 'Tekshirilmoqda…';
+        refreshBtn.disabled = true; refreshBtn.textContent = L('Tekshirilmoqda…');
         try { const r = await api('/journals/refresh', { method: 'POST', body: { category, access } }); toast(r.summary); } catch (e) { toast(e.message); }
         draw();
       } }, '🔄 Yangilash (Refresh)');
@@ -474,7 +500,7 @@ const TRUST = [
 function trustChecklist() {
   const out = h('div', { class: 'alert blue', style: 'margin-top:8px' });
   const boxes = TRUST.map(() => h('input', { type: 'checkbox', style: 'width:auto' }));
-  const calc = () => { const n = boxes.filter((b) => b.checked).length; out.className = `alert ${n >= 8 ? 'green' : n >= 5 ? 'amber' : 'red'}`; out.textContent = `Ishonchlilik: ${n}/${TRUST.length} — ${n >= 8 ? 'yaxshi, yuborish mumkin' : n >= 5 ? 'ehtiyot bo‘ling: yetishmayotgan bandlarni aniqlang' : 'yuborishdan saqlaning: ishonchsiz nashr bo‘lishi mumkin'}`; };
+  const calc = () => { const n = boxes.filter((b) => b.checked).length; out.className = `alert ${n >= 8 ? 'green' : n >= 5 ? 'amber' : 'red'}`; out.textContent = L(`Ishonchlilik: ${n}/${TRUST.length} — ${n >= 8 ? 'yaxshi, yuborish mumkin' : n >= 5 ? 'ehtiyot bo‘ling: yetishmayotgan bandlarni aniqlang' : 'yuborishdan saqlaning: ishonchsiz nashr bo‘lishi mumkin'}`); };
   boxes.forEach((b) => b.addEventListener('change', calc)); calc();
   return h('div', {}, h('h3', { style: 'margin-top:20px' }, '4. Jurnalni yuborishdan oldin ishonchlilik tekshiruvi'),
     h('p', { class: 'small muted' }, "Har bir bandni jurnal saytida tekshirib belgilang (Think. Check. Submit. tamoyillari asosida)."), TRUST.map((t, i) => h('label', { style: 'font-weight:400;display:flex;gap:8px;margin:6px 0' }, boxes[i], t)), out);
@@ -493,8 +519,8 @@ async function openJournal(j, category) {
     const g = d.guide;
     const adviceBox = h('div', { class: 'fit', style: d.advice ? '' : 'display:none', id: 'adv' }, d.advice ? [h('b', {}, '🤖 AI maslahati (mavzuingizga moslashtirilgan): '), h('div', { style: 'white-space:pre-wrap;margin-top:6px' }, d.advice)] : null);
     const advBtn = d.aiEnabled && d.hasProfile ? h('button', { onclick: async (e) => {
-      e.target.disabled = true; e.target.textContent = 'AI tayyorlamoqda…';
-      try { const r = await api(`/journals/${j.id}/advice`, { method: 'POST', body: {} }); fill(adviceBox, h('b', {}, '🤖 AI maslahati (mavzuingizga moslashtirilgan): '), h('div', { style: 'white-space:pre-wrap;margin-top:6px' }, r.advice)); adviceBox.style.display = ''; e.target.remove(); } catch (x) { toast(x.message); e.target.disabled = false; e.target.textContent = '🤖 Mavzuimga moslashtirilgan AI maslahat'; }
+      e.target.disabled = true; e.target.textContent = L('AI tayyorlamoqda…');
+      try { const r = await api(`/journals/${j.id}/advice`, { method: 'POST', body: {} }); fill(adviceBox, h('b', {}, '🤖 AI maslahati (mavzuingizga moslashtirilgan): '), h('div', { style: 'white-space:pre-wrap;margin-top:6px' }, r.advice)); adviceBox.style.display = ''; e.target.remove(); } catch (x) { toast(x.message); e.target.disabled = false; e.target.textContent = L('🤖 Mavzuimga moslashtirilgan AI maslahat'); }
     } }, d.advice ? '🤖 Maslahatni yangilash' : '🤖 Mavzuimga moslashtirilgan AI maslahat') : null;
     fill(modal, h('div', { class: 'card detail' },
       h('div', { class: 'jhead' }, h('h2', { style: 'margin:0' }, d.journal.name), h('button', { onclick: close }, '✕ Yopish')),
@@ -529,7 +555,7 @@ async function adminHome() {
           h('td', {}, f.enabled ? h('span', { class: 'pill green' }, 'yoqilgan') : h('span', { class: 'pill warn' }, 'o‘chiq / manzil yo‘q')),
           h('td', { class: 'small' }, f.last ? [h('span', { class: `pill ${f.last.ok ? 'green' : 'red'}` }, f.last.ok ? 'OK' : 'xato'), ` ${f.last.at.replace('T', ' ').slice(0, 16)} UTC — ${f.last.message}`] : 'Hali yuklanmagan'))))),
       h('div', { style: 'margin-top:10px;display:flex;gap:8px;flex-wrap:wrap' },
-        h('button', { onclick: async (e) => { e.target.disabled = true; e.target.textContent = 'Sinalmoqda…'; try { const r = await api('/admin/ai-test', { method: 'POST', body: {} }); toast(r.ok ? `AI ishlayapti: ${r.provider}, ${r.model} — javob: «${r.reply}»` : `AI xatosi: ${r.error}`); } catch (x) { toast(x.message); } e.target.disabled = false; e.target.textContent = '🤖 AI ni sinash'; } }, '🤖 AI ni sinash'),
+        h('button', { onclick: async (e) => { e.target.disabled = true; e.target.textContent = L('Sinalmoqda…'); try { const r = await api('/admin/ai-test', { method: 'POST', body: {} }); toast(r.ok ? `AI ishlayapti: ${r.provider}, ${r.model} — javob: «${r.reply}»` : `AI xatosi: ${r.error}`); } catch (x) { toast(x.message); } e.target.disabled = false; e.target.textContent = L('🤖 AI ni sinash'); } }, '🤖 AI ni sinash'),
         h('button', { onclick: async (e) => { e.target.disabled = true; try { toast((await api('/admin/sync', { method: 'POST', body: {} })).message); } catch (x) { toast(x.message); } e.target.disabled = false; } }, '🔄 Fidlarni hozir sinxronlash'))),
     h('div', { class: 'card' }, h('h3', {}, "Yo'nalishlar bo'yicha qamrov (har bir katakda kamida 10 ta bo'lishi kerak)"), h('div', { class: 'tablewrap' }, h('table', {}, h('tr', {}, [h('th', {}, "Yo'nalish"), ...cols.map((c) => h('th', {}, c.replace('_', ' ')))]),
       s.coverage.map((r) => h('tr', {}, h('td', {}, `${r.code} ${r.name}`), cols.map((c) => h('td', {}, h('span', { class: `pill ${r[c] >= 10 ? 'green' : 'red'}` }, r[c])))))))));
@@ -540,7 +566,7 @@ async function adminUsers() {
   return h('div', {}, h('h1', {}, 'Foydalanuvchilar'), h('div', { class: 'card tablewrap' }, h('table', {}, h('tr', {}, ['Ism', 'Login', "Yo'nalish", 'Mavzu', 'Muddat', 'Bajarilish', 'Ro‘yxatdan o‘tgan', ''].map((x) => h('th', {}, x))),
     users.map((u) => h('tr', {}, h('td', {}, u.full_name), h('td', {}, u.login), h('td', {}, u.direction_code || '—'), h('td', {}, u.topic || '—'), h('td', {}, u.months ? `${u.months} oy` : '—'), h('td', {}, u.progress != null ? `${u.progress}%` : '—'), h('td', {}, u.created_at),
       h('td', { style: 'white-space:nowrap' }, h('button', { onclick: async () => { const pw = prompt(`${u.full_name} uchun yangi parol (kamida 8 belgi):`); if (pw) { try { await api(`/admin/users/${u.id}/password`, { method: 'POST', body: { password: pw } }); toast('Parol tiklandi; foydalanuvchining sessiyalari tugatildi'); } catch (x) { toast(x.message); } } } }, 'Parolni tiklash'), ' ',
-        h('button', { class: 'danger', onclick: async () => { if (confirm(`${u.full_name} o‘chirilsinmi?`)) { await api(`/admin/users/${u.id}`, { method: 'DELETE', body: {} }); render(); } } }, 'O‘chirish')))))));
+        h('button', { class: 'danger', onclick: async () => { if (confirmL(`${u.full_name} o‘chirilsinmi?`)) { await api(`/admin/users/${u.id}`, { method: 'DELETE', body: {} }); render(); } } }, 'O‘chirish')))))));
 }
 
 const LABELS = { name: 'Nomi', kind: 'Turi (journal/conference)', issn: 'ISSN', publisher: 'Nashriyot', country: 'Mamlakat', since_year: 'Boshlangan yil', access: 'Kirish (free/paid)', apc_usd: 'Nashr to‘lovi, USD', scopus_status: 'Scopus (none/active/discontinued)', quartile: 'Kvartil (Q1–Q4)', oak_status: 'OAK (none/active/removed)', impact_factor: 'Impakt faktor', if_source: 'IF manbasi (jcr/esci/alt)', wos: 'WoS (0/1)', subjects: 'Teglar (vergul bilan)', acceptance: 'Qabul ehtimoli 1–5', review_weeks: 'Ko‘rib chiqish, hafta', official_url: 'Rasmiy sayt URL', scopus_url: 'Scopus isbot havolasi', oak_url: 'OAK havolasi', description: 'Tavsif', verified: 'Tasdiqlangan (0/1)', code: 'Kod', field_group: 'Soha guruhi', tags: 'Teglar', hints: "Maslahatlar ('|' bilan ajrating)", degree: 'Daraja (phd/dsc)', title: 'Sarlavha', min_count: 'Minimal soni', source_url: 'Manba URL', key: 'Kalit', category: 'Kategoriya', cancelled_from: 'Bekor qilinish sanasi (YYYY-MM-DD)', phase: 'Bosqich (early/mid/late)', required: 'Majburiy (0/1)', directions: "Yo'nalish teglari (bo'sh=hammaga)", author: 'Muallif', text: 'Matn', note: 'Izoh' };
@@ -568,9 +594,9 @@ async function adminEntity(name) {
       h('div', { style: 'display:flex;gap:8px;margin-top:14px' },
         h('button', { class: 'primary', onclick: async () => {
           const body = {}; d.cols.forEach((c) => { body[c] = inputs[c].value; });
-          try { await api(isNew ? `/admin/e/${name}` : `/admin/e/${name}/${encodeURIComponent(row[d.pk])}`, { method: isNew ? 'POST' : 'PUT', body }); modal.remove(); render(); } catch (x) { err.textContent = x.message; }
+          try { await api(isNew ? `/admin/e/${name}` : `/admin/e/${name}/${encodeURIComponent(row[d.pk])}`, { method: isNew ? 'POST' : 'PUT', body }); modal.remove(); render(); } catch (x) { err.textContent = L(x.message); }
         } }, 'Saqlash'), h('button', { onclick: () => modal.remove() }, 'Bekor qilish'),
-        isNew ? null : h('button', { class: 'danger', style: 'margin-left:auto', onclick: async () => { if (confirm("O'chirilsinmi?")) { await api(`/admin/e/${name}/${encodeURIComponent(row[d.pk])}`, { method: 'DELETE', body: {} }); modal.remove(); render(); } } }, "O'chirish"))));
+        isNew ? null : h('button', { class: 'danger', style: 'margin-left:auto', onclick: async () => { if (confirmL("O'chirilsinmi?")) { await api(`/admin/e/${name}/${encodeURIComponent(row[d.pk])}`, { method: 'DELETE', body: {} }); modal.remove(); render(); } } }, "O'chirish"))));
     document.body.append(modal);
   };
   draw();
@@ -585,8 +611,8 @@ async function adminImport() {
   const out = h('div', { class: 'small', style: 'margin-top:10px;white-space:pre-wrap' });
   const file = h('input', { type: 'file', accept: '.csv,.json,.txt', onchange: async (e) => { f.content.value = await e.target.files[0].text(); } });
   const run = (path, label) => h('button', { class: label === 'AI' ? '' : 'primary', onclick: async (e) => {
-    e.target.disabled = true; out.textContent = 'Bajarilmoqda…';
-    try { const r = await api(path, { method: 'POST', body: { source: f.source.value, content: f.content.value, full: f.full.checked, addNew: f.addNew.checked } }); out.textContent = `${r.total} ta yozuv o‘qildi — ${r.text}`; } catch (x) { out.textContent = x.message; }
+    e.target.disabled = true; out.textContent = L('Bajarilmoqda…');
+    try { const r = await api(path, { method: 'POST', body: { source: f.source.value, content: f.content.value, full: f.full.checked, addNew: f.addNew.checked } }); out.textContent = L(`${r.total} ta yozuv o‘qildi — ${r.text}`); } catch (x) { out.textContent = L(x.message); }
     e.target.disabled = false;
   } }, label === 'AI' ? "🤖 AI bilan ajratib import qilish" : 'Import qilish');
   return h('div', {}, h('h1', {}, 'Fid / import'),
@@ -631,6 +657,7 @@ async function render() {
 }
 
 async function boot() {
+  await ensureDict();
   const [me, meta] = await Promise.all([api('/me'), api('/meta')]);
   state.user = me.user; state.meta = meta;
   render();

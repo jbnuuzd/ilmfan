@@ -16,13 +16,22 @@ const KW = {
   energiya: 'energy', quyosh: 'energy', material: 'materials', dastur: 'cs', algoritm: 'cs', tibbiyot: 'medicine', kimyo: 'chemistry', qishloq: 'agri',
   huquq: 'law', til: 'linguistics', adabiyot: 'humanities',
   vocational: 'vocational', education: 'education', digital: 'edtech', technology: 'edtech', learning: 'education',
+  // ruscha o'zaklar (mavzu rus tilida kiritilsa ham jurnal tavsiyasi ishlashi uchun)
+  профес: 'vocational', колледж: 'vocational', техникум: 'vocational', дуальн: 'vocational',
+  цифров: 'edtech', дистанц: 'edtech', электронн: 'edtech', технолог: 'edtech', искусственн: 'edtech', виртуальн: 'edtech', мобильн: 'edtech',
+  высш: 'highered', университет: 'highered', студент: 'highered',
+  педагог: 'pedagogy', методик: 'pedagogy', учител: 'pedagogy', компетенц: 'pedagogy', воспитан: 'pedagogy', образован: 'education', обучен: 'education',
+  экономик: 'economics', финанс: 'finance', банк: 'finance', менеджмент: 'management', управлен: 'management',
+  туризм: 'tourism', turizm: 'tourism', tourism: 'tourism', гостинич: 'tourism', mehmonxona: 'tourism', sayyoh: 'tourism',
+  энерг: 'energy', солнечн: 'energy', материал: 'materials', программ: 'cs', алгоритм: 'cs', медицин: 'medicine', хими: 'chemistry', сельск: 'agri',
+  юридич: 'law', право: 'law', язык: 'linguistics', литератур: 'humanities',
 };
 
 const tagsOf = (s) => String(s || '').split(',').map((x) => x.trim()).filter(Boolean);
 
 function topicTags(topic) {
   const hits = [];
-  const words = String(topic || '').toLowerCase().replace(/[’'ʻ`‘]/g, '_').split(/[^a-z_0-9]+/);
+  const words = String(topic || '').toLowerCase().replace(/[’'ʻ`‘]/g, '_').split(/[^\p{L}\p{N}_]+/u);
   for (const w of words) for (const [k, tag] of Object.entries(KW)) if (w.startsWith(k)) hits.push([k, tag]);
   return hits;
 }
@@ -79,7 +88,7 @@ async function getProfileCtx(db, userId) {
   return { profile, direction };
 }
 
-async function ensureRecommendations(db, userId, category, access) {
+async function ensureRecommendations(db, userId, category, access, lang = 'uz') {
   const { profile, direction } = await getProfileCtx(db, userId);
   if (!profile || !direction) return { needProfile: true };
   const existing = (await db.prepare('SELECT journal_id FROM user_journals WHERE user_id=? AND category=?').all(userId, category)).map((r) => r.journal_id);
@@ -87,14 +96,14 @@ async function ensureRecommendations(db, userId, category, access) {
   const need = COUNT - activeCount;
   if (need > 0) {
     const picks = (await candidates(db, category, access, direction, profile.topic, existing)).slice(0, need);
-    await addRows(db, userId, category, access, picks, direction, profile, null);
+    await addRows(db, userId, category, access, picks, direction, profile, null, '', lang);
   }
   return {};
 }
 
-async function addRows(db, userId, category, access, picks, direction, profile, replacesList, note = '') {
+async function addRows(db, userId, category, access, picks, direction, profile, replacesList, note = '', lang = 'uz') {
   if (!picks.length) return;
-  const fits = await ai.journalFits(profile, direction, picks);
+  const fits = await ai.journalFits(profile, direction, picks, lang);
   await db.batch(picks.map((j, i) => {
     const f = fits.get(j.id);
     return ['INSERT OR IGNORE INTO user_journals(user_id,journal_id,category,access,snap_quartile,fit_score,fit_text,replaces,note) VALUES(?,?,?,?,?,?,?,?,?)',
@@ -117,12 +126,12 @@ async function list(db, userId, category, access) {
  *  - har bir belgilangan jurnal o'rniga yangi tavsiya qo'shiladi (jami faol tavsiyalar 10 ta bo'lib qoladi);
  *  - kvartil ko'tarilgan bo'lsa — yashil belgi.
  */
-async function refresh(db, userId, category, access, { syncFeeds } = {}) {
+async function refresh(db, userId, category, access, { syncFeeds, lang = 'uz' } = {}) {
   const { profile, direction } = await getProfileCtx(db, userId);
   if (!profile || !direction) return { needProfile: true };
   const feedMsg = syncFeeds ? await syncFeeds() : null;
 
-  await ensureRecommendations(db, userId, category, access);
+  await ensureRecommendations(db, userId, category, access, lang);
   // oldingi refreshdagi "yangi"/"ko'tarilgan" belgilari yangi tekshiruvda tozalanadi
   await db.prepare("UPDATE user_journals SET note='' WHERE user_id=? AND category=? AND access=? AND flag=''").run(userId, category, access);
   const rows = await db.prepare(`
@@ -157,11 +166,11 @@ async function refresh(db, userId, category, access, { syncFeeds } = {}) {
   if (flagged.length) {
     const exclude = (await db.prepare('SELECT journal_id FROM user_journals WHERE user_id=? AND category=?').all(userId, category)).map((r) => r.journal_id);
     const picks = (await candidates(db, category, access, direction, profile.topic, exclude)).slice(0, flagged.length);
-    await addRows(db, userId, category, access, picks, direction, profile, flagged.map((f) => f.id));
+    await addRows(db, userId, category, access, picks, direction, profile, flagged.map((f) => f.id), '', lang);
     added = picks.length;
   }
   // Agar avvalgi refreshlarda yetishmagan o'rinlar bo'lsa — to'ldirish
-  await ensureRecommendations(db, userId, category, access);
+  await ensureRecommendations(db, userId, category, access, lang);
 
   const lines = [
     ...flagged.map((f) => `«${f.name}»: ${f.reason}`),
@@ -171,7 +180,7 @@ async function refresh(db, userId, category, access, { syncFeeds } = {}) {
     ? `${flagged.length} ta jurnalda salbiy o'zgarish, ${upgraded.length} ta jurnalda ijobiy o'zgarish aniqlandi; ${added} ta yangi jurnal tavsiya etildi.`
     : "Hech qanday o'zgarish aniqlanmadi — barcha tavsiyalar dolzarb.";
   if (feedMsg) summary += ` ${feedMsg}`;
-  const aiNote = lines.length ? await ai.summarizeChanges(lines) : null;
+  const aiNote = lines.length ? await ai.summarizeChanges(lines, lang) : null;
   await db.prepare('INSERT INTO refresh_log(user_id,category,access,summary) VALUES(?,?,?,?)').run(userId, category, access, summary + (aiNote ? `\n${aiNote}` : ''));
   return { summary, aiNote, flagged: flagged.length, upgraded: upgraded.length, added, lines };
 }
