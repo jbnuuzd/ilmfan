@@ -125,3 +125,9 @@ ajratish), jurnallardagi o'zgarishlar tarixi.
 * Pedagogika (13.00.00, 135 ta jurnal), tibbiyot, texnika va boshqa sohalarning OAK ro'yxati hali yuklanmagan — oak.uz reyestridan CSV/JSON qilib import qiling.
 * Admin panelidagi «Qamrov» jadvali har bir yo'nalish/toifada nechta nomzod borligini ko'rsatadi (qizil = 10 tadan kam).
 * oak.uz va Scopus bilan jonli integratsiya sinab ko'rilmagan (sandbox'dan oak.uz ochilmadi); u fid formatlari orqali qurilgan va testlangan.
+
+## Qo'shimcha imkoniyatlar
+- ☆ Saqlangan jurnallar (izoh bilan) va 4 tagacha jurnalni yonma-yon taqqoslash (`#/saved`).
+- Ilmiy ishlar ro'yxati (nusxalash, .txt, CSV) va dissertatsiya kirish matnini .txt sifatida yuklash.
+- Yorug'/qorong'i/avto mavzu almashtirgich, mobil menyu.
+- Admin: tahlil paneli (`/api/admin/analytics`) va jurnallar CSV eksporti (`/api/admin/export/journals.csv`).

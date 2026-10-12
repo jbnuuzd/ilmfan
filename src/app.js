@@ -39,6 +39,8 @@ const PUB_KINDS = ['oak', 'foreign', 'conf_int', 'conf_nat', 'other'];
 const PUB_STATUS = ['draft', 'submitted', 'review', 'revision', 'accepted', 'published', 'rejected'];
 const IN_PROGRESS = ['submitted', 'review', 'revision', 'accepted'];
 const validDate = (s) => s === '' || (/^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s)));
+const categoryOf = (j) => (j.kind === 'conference' ? 'conference' : j.scopus_status !== 'none' ? 'scopus' : j.oak_status !== 'none' ? 'oak' : 'impact_lite');
+const csvCell = (v) => { const s = v == null ? '' : String(v); return /[",\n\r;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
 const dayNumber = () => Math.floor(Date.now() / 864e5);
 
 function createHandler(db) {
@@ -459,6 +461,50 @@ function createHandler(db) {
     return { __raw: { body: lines.join('\r\n') + '\r\n', type: 'text/calendar; charset=utf-8', filename: 'ilmiy-yuksalish-trayektoriya.ics' } };
   });
 
+
+  // ---------- Saqlangan jurnallar ----------
+  route('GET', '/api/bookmarks', 'user', async (req, body, ctx) => ({
+    items: (await db.prepare('SELECT b.note, b.created_at AS saved_at, j.* FROM bookmarks b JOIN journals j ON j.id=b.journal_id WHERE b.user_id=? ORDER BY b.created_at DESC').all(ctx.user.id))
+      .map((j) => ({ ...j, bookmarked: true, category: categoryOf(j) })),
+  }));
+  route('PUT', '/api/bookmarks/(\\d+)', 'user', async (req, body, ctx) => {
+    const id = Number(ctx.params[0]);
+    if (!(await db.prepare('SELECT 1 x FROM journals WHERE id=?').get(id))) throw new HttpError(404, 'Jurnal topilmadi');
+    const note = String(body.note || '').slice(0, 500);
+    await db.prepare('INSERT INTO bookmarks(user_id,journal_id,note) VALUES(?,?,?) ON CONFLICT(user_id,journal_id) DO UPDATE SET note=excluded.note').run(ctx.user.id, id, note);
+    return { ok: true };
+  });
+  route('DELETE', '/api/bookmarks/(\\d+)', 'user', async (req, body, ctx) => {
+    await db.prepare('DELETE FROM bookmarks WHERE user_id=? AND journal_id=?').run(ctx.user.id, Number(ctx.params[0]));
+    return { ok: true };
+  });
+
+  // ---------- Admin: tahlil va eksport ----------
+  route('GET', '/api/admin/analytics', 'admin', async () => {
+    const q = (sql) => db.prepare(sql).all();
+    const [weeks, dirs, statuses, pubs, active, totals, users] = await Promise.all([
+      q("SELECT strftime('%Y-%m-%d', created_at, 'weekday 0', '-6 days') w, COUNT(*) c FROM users WHERE role='user' GROUP BY w ORDER BY w DESC LIMIT 12"),
+      q('SELECT direction_code code, COUNT(*) c FROM profiles GROUP BY direction_code ORDER BY c DESC LIMIT 10'),
+      q('SELECT status, COUNT(*) c FROM profiles GROUP BY status'),
+      q('SELECT status, COUNT(*) c FROM publications GROUP BY status'),
+      db.prepare("SELECT COUNT(DISTINCT u) c FROM (SELECT user_id u FROM user_tasks WHERE done_at >= date('now','-7 day') UNION SELECT user_id u FROM publications WHERE updated_at >= date('now','-7 day') UNION SELECT user_id u FROM thesis_chapters WHERE 0)").get(),
+      db.prepare("SELECT (SELECT COUNT(*) FROM users WHERE role='user') users, (SELECT COUNT(*) FROM profiles) profiles, (SELECT COUNT(*) FROM publications) pubs, (SELECT COUNT(*) FROM bookmarks) bookmarks, (SELECT COUNT(DISTINCT user_id) FROM thesis_chapters) thesis_users, (SELECT COUNT(*) FROM thesis_intro WHERE done=1) intro_done").get(),
+      q("SELECT u.id, p.direction_code, p.months, p.start_month, p.degree FROM users u JOIN profiles p ON p.user_id=u.id WHERE u.role='user'"),
+    ]);
+    const [dirRows, reqs, docT, tasks] = await Promise.all([q('SELECT * FROM directions'), q('SELECT * FROM requirements'), q('SELECT * FROM doc_templates ORDER BY id'), q('SELECT user_id, task_key FROM user_tasks WHERE done=1')]);
+    const doneBy = new Map();
+    for (const t of tasks) { if (!doneBy.has(t.user_id)) doneBy.set(t.user_id, new Set()); doneBy.get(t.user_id).add(t.task_key); }
+    const pcts = users.map((u) => buildContext({ months: u.months, start_month: u.start_month }, dirRows.find((d) => d.code === u.direction_code), reqs.filter((r) => r.degree === u.degree), docT, doneBy.get(u.id) || new Set()).progress.pct);
+    return { weeks: weeks.reverse(), byDirection: dirs, byStatus: statuses, pubsByStatus: pubs, active7: active.c, totals, avgProgress: pcts.length ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length) : 0 };
+  });
+
+  route('GET', '/api/admin/export/journals.csv', 'admin', async () => {
+    const cols = ['id', ...ENTITIES.journals.cols];
+    const rows = await db.prepare(`SELECT ${cols.join(',')} FROM journals ORDER BY name`).all();
+    const body = '﻿' + [cols.join(','), ...rows.map((r) => cols.map((c) => csvCell(r[c])).join(','))].join('\r\n') + '\r\n';
+    return { __raw: { body, type: 'text/csv; charset=utf-8', filename: 'jurnallar.csv' } };
+  });
+
   // ---------- Barcha jurnallarni qidirish (katalog) ----------
   route('GET', '/api/catalog', 'user', async (req, body, ctx) => {
     const { q = '', type = 'all', access = '', quartile = '' } = ctx.query;
@@ -471,8 +517,9 @@ function createHandler(db) {
     if (['free', 'paid'].includes(access)) rows = rows.filter((j) => j.access === access);
     if (/^Q[1-4]$/.test(quartile)) rows = rows.filter((j) => j.quartile === quartile);
     const total = rows.length;
-    const items = rows.slice((page - 1) * size, page * size).map((j) => ({ ...j, category: j.kind === 'conference' ? 'conference' : j.scopus_status !== 'none' ? 'scopus' : j.oak_status !== 'none' ? 'oak' : 'impact_lite' }));
-    return { items, total, page, pages: Math.max(1, Math.ceil(total / size)) };
+    const items = rows.slice((page - 1) * size, page * size).map((j) => ({ ...j, category: categoryOf(j) }));
+    const bm = new Set((await db.prepare('SELECT journal_id FROM bookmarks WHERE user_id=?').all(ctx.user.id)).map((r) => r.journal_id));
+    return { items: items.map((j) => ({ ...j, bookmarked: bm.has(j.id) })), total, page, pages: Math.max(1, Math.ceil(total / size)) };
   });
 
   // ---------- Hisob: parolni o'zgartirish ----------
@@ -491,7 +538,8 @@ function createHandler(db) {
     if (!rec.CATEGORIES.includes(category) || !['free', 'paid'].includes(access)) throw bad('category/access noto‘g‘ri');
     const r = await rec.ensureRecommendations(db, ctx.user.id, category, access, ctx.lang);
     if (r.needProfile) return { needProfile: true };
-    const items = await rec.list(db, ctx.user.id, category, access);
+    const bm = new Set((await db.prepare('SELECT journal_id FROM bookmarks WHERE user_id=?').all(ctx.user.id)).map((r) => r.journal_id));
+    const items = (await rec.list(db, ctx.user.id, category, access)).map((j) => ({ ...j, bookmarked: bm.has(j.id) }));
     const log = await db.prepare('SELECT summary, created_at FROM refresh_log WHERE user_id=? AND category=? AND access=? ORDER BY id DESC LIMIT 1').get(ctx.user.id, category, access);
     return { items, lastRefresh: log || null, ai: ai.enabled() };
   });

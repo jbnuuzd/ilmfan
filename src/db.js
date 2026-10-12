@@ -171,6 +171,13 @@ CREATE TABLE IF NOT EXISTS thesis_ideas (
   ai INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS bookmarks (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  journal_id INTEGER NOT NULL REFERENCES journals(id) ON DELETE CASCADE,
+  note TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, journal_id)
+);
 CREATE TABLE IF NOT EXISTS journal_advice (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   journal_id INTEGER NOT NULL REFERENCES journals(id) ON DELETE CASCADE,
