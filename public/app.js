@@ -10,6 +10,20 @@ let THEME = 'auto';
 try { THEME = THEMES.includes(localStorage.getItem('theme')) ? localStorage.getItem('theme') : 'auto'; } catch { /* brauzer saqlashni bloklagan */ }
 function applyTheme() { if (THEME === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = THEME; }
 applyTheme();
+// ---------------- Ilova sifatida o'rnatish (PWA) ----------------
+let installPrompt = null;
+const standalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installPrompt = e; try { render(); } catch { /* hali tayyor emas */ } });
+window.addEventListener('appinstalled', () => { installPrompt = null; try { render(); } catch { /* e'tiborsiz */ } });
+if ('serviceWorker' in navigator && location.protocol !== 'file:') window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+const installButton = () => {
+  if (standalone() || (!installPrompt && !isIos)) return '';
+  return h('button', { class: 'noprint', title: 'Ilovani o‘rnatish', onclick: async () => {
+    if (installPrompt) { installPrompt.prompt(); await installPrompt.userChoice.catch(() => null); installPrompt = null; render(); }
+    else alert(L('Safari: «Ulashish» tugmasi → «Bosh ekranga qo‘shish» ni tanlang.'));
+  } }, L('📲 O‘rnatish'));
+};
 const themeButton = () => h('button', { class: 'noprint', title: 'Mavzu: avto / yorug‘ / qorong‘i', onclick: () => { THEME = THEMES[(THEMES.indexOf(THEME) + 1) % 3]; try { localStorage.setItem('theme', THEME); } catch { /* e'tiborsiz */ } applyTheme(); render(); } }, { auto: '🌓', light: '☀️', dark: '🌙' }[THEME]);
 function download(filename, text, type = 'text/plain') {
   const url = URL.createObjectURL(new Blob([text], { type: `${type};charset=utf-8` }));
@@ -114,7 +128,7 @@ function authView() {
     box.querySelectorAll('input').forEach((i) => i.addEventListener('keydown', (e) => { if (e.key === 'Enter') box.querySelector('button.primary').click(); }));
   };
   draw();
-  return h('main', {}, box, h('p', { style: 'text-align:center' }, langButton(), ' ', themeButton()), h('p', { class: 'muted small', style: 'text-align:center' }, state.meta?.notice || ''));
+  return h('main', {}, box, h('p', { style: 'text-align:center' }, langButton(), ' ', themeButton(), ' ', installButton()), h('p', { class: 'muted small', style: 'text-align:center' }, state.meta?.notice || ''));
 }
 
 // ---------------- Layout ----------------
@@ -131,6 +145,7 @@ function layout(content) {
       h('nav', {}, nav.map(([href, label]) => h('a', { href, class: cur === href || (href.length > 3 && cur.startsWith(href + '/')) ? 'active' : '' }, label))),
       h('span', { class: 'muted small' }, state.user.full_name),
       themeButton(),
+      installButton(),
       state.user.role === 'admin' ? null : langButton(),
       h('button', { class: 'noprint', title: 'Parolni o‘zgartirish', onclick: openPasswordModal }, '🔑'),
       h('button', { onclick: async () => { await api('/logout', { method: 'POST', body: {} }); state.user = null; location.hash = '#/'; render(); } }, 'Chiqish'))),
@@ -754,7 +769,12 @@ async function render() {
 
 async function boot() {
   await ensureDict();
-  const [me, meta] = await Promise.all([api('/me'), api('/meta')]);
+  let me, meta;
+  try { [me, meta] = await Promise.all([api('/me'), api('/meta')]); } catch {
+    fill($app, h('main', { style: 'text-align:center;padding-top:20vh' }, h('h2', {}, L('Internet aloqasi yo‘q')), h('p', { class: 'muted' }, L('Ilmiy yuksalish ishlashi uchun tarmoq kerak. Aloqa tiklanganda qayta urinib ko‘ring.')), h('button', { class: 'primary', onclick: () => boot() }, L('Qayta urinish'))));
+    window.addEventListener('online', () => boot(), { once: true });
+    return;
+  }
   state.user = me.user; state.meta = meta;
   render();
 }

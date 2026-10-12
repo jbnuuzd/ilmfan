@@ -2,10 +2,23 @@
   "name": "Ilmiy yuksalish",
   "short_name": "Ilmiy yuksalish",
   "description": "Tadqiqotchilar uchun: jurnallar, OAK talablari, shaxsiy trayektoriya va AI ko'magi",
-  "start_url": "/",
+  "id": "/",
+  "start_url": "/?source=pwa",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "any",
   "background_color": "#f4f6fb",
   "theme_color": "#2f5bea",
   "lang": "uz",
-  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+  "categories": ["education", "productivity"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Jurnallar", "url": "/#/j/scopus", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Saqlanganlar", "url": "/#/saved", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
+  ]
 }

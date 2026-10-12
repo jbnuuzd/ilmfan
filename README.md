@@ -137,3 +137,6 @@ ajratish), jurnallardagi o'zgarishlar tarixi.
 - `OAK_FEED_URL` — to'g'ridan-to'g'ri fayl yoki sahifa manzili; `off` — o'chirish.
 - Sayt bloklasa: `www`/non-`www` variant va `FEED_PROXY_URL` (masalan `https://relay.example/?u={url}`) orqali qayta uriniladi.
 - Har dushanba 03:00 UTC, Refresh bosilganda yoki admin → «Fid / import» da yuklanadi.
+
+## Ilova (PWA) sifatida o'rnatish
+Sayt telefon/kompyuterga ilova kabi o'rnatiladi: Chrome/Edge'da «📲 O'rnatish» tugmasi, iPhone Safari'da «Ulashish → Bosh ekranga qo'shish». Ilova qobig'i `sw.js` orqali keshlanadi (API hech qachon keshlanmaydi), internet bo'lmasa tushunarli xabar chiqadi.

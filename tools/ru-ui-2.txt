@@ -28,5 +28,11 @@
   "Saqlab qo‘yish": "Сохранить",
   "Saqlangan": "Сохранено",
   "Yuklab olish uchun kamida bitta band matnini yozib saqlang": "Чтобы скачать, напишите и сохраните текст хотя бы одного пункта",
-  "⬇ Kirish matnini yuklab olish (.txt)": "⬇ Скачать текст введения (.txt)"
+  "⬇ Kirish matnini yuklab olish (.txt)": "⬇ Скачать текст введения (.txt)",
+  "Ilovani o‘rnatish": "Установить приложение",
+  "📲 O‘rnatish": "📲 Установить",
+  "Safari: «Ulashish» tugmasi → «Bosh ekranga qo‘shish» ni tanlang.": "Safari: нажмите «Поделиться» → «На экран «Домой»».",
+  "Internet aloqasi yo‘q": "Нет подключения к интернету",
+  "Ilmiy yuksalish ishlashi uchun tarmoq kerak. Aloqa tiklanganda qayta urinib ko‘ring.": "Для работы приложения нужна сеть. Попробуйте снова, когда связь восстановится.",
+  "Qayta urinish": "Повторить"
 }

@@ -66,3 +66,9 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{padding:8px 10px;
 .cmp th:first-child,.cmp td:first-child{white-space:nowrap;color:var(--muted);font-weight:600}.cmp td{min-width:170px}
 .bars{display:flex;align-items:flex-end;gap:6px;height:120px;margin:10px 0 4px}.bars>div{flex:1;background:linear-gradient(180deg,var(--brand),#12b886);border-radius:6px 6px 0 0;min-height:3px;position:relative}.bars>div>span{position:absolute;top:-18px;left:0;right:0;text-align:center;font-size:11px;color:var(--muted)}
 .hbar{display:grid;grid-template-columns:120px 1fr 34px;gap:8px;align-items:center;margin:4px 0;font-size:13px}.hbar>i{display:block;height:10px;border-radius:99px;background:var(--brand)}
+
+/* Ilova (PWA) rejimi: notch/home-indicator zonalari, bosish effekti */
+header.top{padding-top:env(safe-area-inset-top)}
+body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right);padding-bottom:env(safe-area-inset-bottom);-webkit-tap-highlight-color:transparent}
+button,a{touch-action:manipulation}
+@media (display-mode: standalone){body{overscroll-behavior-y:contain}}
