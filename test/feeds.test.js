@@ -65,10 +65,12 @@ test('avtomatik sinxronlash: kvartil o‘zgaradi, chiqarilgan jurnal belgilanadi
     const calls = mockFetch([
       [/scimagojr\.com/, () => new Response(scimagoCsv(), { status: 200 })],
       [/oak\.uz.*Discontinued/, () => new Response(XLSX, { status: 200 })],
+      [/oak\.uz\/pages\/31738/, () => new Response('<!DOCTYPE html><html><body><a href="/userfiles/files/royxat.csv">Ro\'yxat</a><a href="/userfiles/files/2%20Discontinued-sources.xlsx">x</a></body></html>', { status: 200 })],
+      [/royxat\.csv/, () => new Response('name,issn,publisher\nComputers & Education,0360-1315,Elsevier Science Publishers\n', { status: 200 })],
     ]);
     const msg = await feeds.syncConfiguredFeeds(db, { force: true });
-    assert.match(msg, /SCImago/); assert.match(msg, /chiqarilgan/);
-    assert.equal(calls.length, 2);
+    assert.match(msg, /SCImago/); assert.match(msg, /chiqarilgan/); assert.match(msg, /OAK ro'yxati: 1 ta yozuv/);
+    assert.equal(calls.length, 4);   // scimago, discontinued, OAK sahifasi, sahifadagi CSV (discontinued havola o'tkazib yuboriladi)
     assert.equal((await q(db, 'Computers & Education')).quartile, 'Q2');
     assert.equal((await q(db, 'Computers & Education')).issn, '03601315');           // ISSN to'ldirildi
     assert.equal((await q(db, 'Cypriot Journal of Educational Sciences')).scopus_status, 'discontinued');
@@ -87,7 +89,7 @@ test('avtomatik sinxronlash: kvartil o‘zgaradi, chiqarilgan jurnal belgilanadi
 
     const st = await feeds.feedStatus(db);
     assert.ok(st.find((s) => s.key === 'scimago').last.ok && st.find((s) => s.key === 'discontinued').last.ok);
-    assert.equal(st.find((s) => s.key === 'oak').enabled, false); // OAK uchun standart manba yo'q
+    assert.ok(st.find((s) => s.key === 'oak').last.ok);   // OAK sahifasi kuzatildi
   } finally { global.fetch = realFetch; }
 });
 

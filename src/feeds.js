@@ -5,7 +5,8 @@
  * Manbalar (har biri env bilan almashtiriladi yoki 'off' bilan o'chiriladi):
  *   scimago       SCOPUS_FEED_URL            SCImago "Journal Rankings" CSV  -> kvartillar (jurnal Scopus'da faol)
  *   discontinued  SCOPUS_DISCONTINUED_URL    OAK saytidagi "Scopus'dan chiqarilgan jurnallar" .xlsx -> scopus_status=discontinued
- *   oak           OAK_FEED_URL               ixtiyoriy: OAK ro'yxati (CSV/JSON)  (standart manba yo'q)
+ *   oak           OAK_FEED_URL               OAK ro'yxati: sahifa (HTML — undagi .xlsx/.csv havolalar o'zi topiladi), .xlsx, CSV yoki JSON
+ *   FEED_PROXY_URL                           ixtiyoriy: sayt bloklasa, so'rov shu relay orqali takrorlanadi (masalan https://relay.example/?u={url})
  * FEEDS_AUTO=0 — barcha avtomatik yuklashni o'chiradi. FEED_TTL_HOURS — takroriy yuklash oralig'i (standart 168 = haftasiga).
  * Yuklash: Cloudflare Cron Trigger (haftalik), foydalanuvchi Refresh bosganda (TTL bo'yicha) yoki admin tugmasi bilan.
  * Qo'lda yuklash (admin → Fid / import) ham saqlangan.
@@ -17,7 +18,7 @@ const { parseXlsx } = require('./xlsx');
 const SOURCES = {
   scimago: { source: 'scopus', env: 'SCOPUS_FEED_URL', url: 'https://www.scimagojr.com/journalrank.php?out=xls', label: 'SCImago (Scopus kvartillari)' },
   discontinued: { source: 'scopus', env: 'SCOPUS_DISCONTINUED_URL', url: 'https://oak.uz/userfiles/files/2%20Discontinued-sources-from-Scopus-January_2026.xlsx', label: "Scopus'dan chiqarilgan jurnallar (OAK)" },
-  oak: { source: 'oak', env: 'OAK_FEED_URL', url: null, label: "OAK ro'yxati" },
+  oak: { source: 'oak', env: 'OAK_FEED_URL', url: 'https://oak.uz/pages/31738', label: "OAK ro'yxati" },
 };
 
 function sourceUrl(key, env = process.env) {
@@ -123,7 +124,7 @@ function scanScimago(text, wantedNames, wantedIssns) {
 }
 
 /** OAK "Scopus'dan chiqarilgan" .xlsx: sarlavha qatori (title + issn ustunlari) avtomatik topiladi */
-async function parseDiscontinuedXlsx(bytes) {
+async function parseDiscontinuedXlsx(bytes, oak = false) {
   const sheets = await parseXlsx(bytes);
   const items = [];
   for (const rows of sheets) {
@@ -135,7 +136,7 @@ async function parseDiscontinuedXlsx(bytes) {
     for (const r of rows.slice(hi + 1)) {
       const name = (r[iT] || '').trim();
       const issns = issnList(iIssn.map((i) => r[i] || '').join(','));
-      if (name || issns.length) items.push({ name, issn: issns[0] || '', issns, quartile: '', scopus_status: 'discontinued', oak_status: '', publisher: '', subjects: '', access: '' });
+      if (name || issns.length) items.push({ name, issn: issns[0] || '', issns, quartile: '', scopus_status: oak ? '' : 'discontinued', oak_status: oak ? 'active' : '', publisher: '', subjects: '', access: '' });
     }
   }
   if (!items.length) throw new Error("Excel faylida sarlavha (Title / ISSN) topilmadi");
@@ -212,12 +213,27 @@ const describe = (s) => `yangilandi: ${s.updated}, yangi: ${s.added}, ro'yxatdan
 // ---------------- Avtomatik yuklash ----------------
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 
-async function download(url) {
-  const res = await fetch(url, { headers: { 'user-agent': UA, accept: 'text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/json,text/html;q=0.8,*/*;q=0.5', 'accept-language': 'en-US,en;q=0.9', referer: new URL(url).origin + '/' }, redirect: 'follow', signal: AbortSignal.timeout(90000) });
+async function fetchOnce(url) {
+  const res = await fetch(url, { headers: { 'user-agent': UA, accept: 'text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/json,text/html;q=0.8,*/*;q=0.5', 'accept-language': 'en-US,en;q=0.9', referer: new URL(url).origin + '/' }, redirect: 'follow', signal: AbortSignal.timeout(60000) });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const bytes = new Uint8Array(await res.arrayBuffer());
   if (bytes.length < 50) throw new Error("javob bo'sh");
   return bytes;
+}
+
+/** To'g'ridan-to'g'ri; bo'lmasa www/non-www variant; bo'lmasa FEED_PROXY_URL relay orqali */
+async function download(url) {
+  const tries = [url];
+  try { const u = new URL(url); const alt = new URL(url); alt.hostname = u.hostname.startsWith('www.') ? u.hostname.slice(4) : 'www.' + u.hostname; tries.push(alt.href); } catch { /* e'tiborsiz */ }
+  const proxy = process.env.FEED_PROXY_URL;
+  if (proxy && proxy.includes('{url}')) tries.push(proxy.replace('{url}', encodeURIComponent(url)));
+  const errs = [];
+  for (const t of tries) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try { return await fetchOnce(t); } catch (e) { errs.push(e.message); if (/HTTP 4(0[134]|29)/.test(e.message)) break; }
+    }
+  }
+  throw new Error([...new Set(errs)].join(', '));
 }
 const looksHtml = (text) => /^\s*<(!doctype|html|head|body)/i.test(text.slice(0, 200));
 
@@ -232,15 +248,40 @@ async function applyScimagoText(db, text) {
 }
 const isScimagoCsv = (text) => /sjr best quartile/i.test(String(text).slice(0, 3000));
 
+
+const isXlsx = (b) => b[0] === 0x50 && b[1] === 0x4b;
+/** OAK sahifasi/fayli: .xlsx, CSV/JSON yoki HTML (undagi fayl havolalari kuzatiladi) */
+async function runOak(db, url, bytes, depth = 0) {
+  if (isXlsx(bytes)) {
+    const items = await parseDiscontinuedXlsx(bytes, true);
+    return { items };
+  }
+  const text = new TextDecoder().decode(bytes);
+  if (!looksHtml(text)) return { items: parseFeed(text) };
+  if (depth > 0) throw new Error('HTML sahifada fayl topilmadi');
+  const links = [...text.matchAll(/href=["']([^"']+\.(?:xlsx|csv)(?:\?[^"']*)?)["']/gi)].map((m) => { try { return new URL(m[1].replace(/&amp;/g, '&'), url).href; } catch { return null; } }).filter(Boolean);
+  const wanted = [...new Set(links)].filter((l) => !/discontinued/i.test(l)).slice(0, 6);
+  if (!wanted.length) throw new Error("OAK sahifasida .xlsx/.csv havola topilmadi (sahifa o'zgargan bo'lishi mumkin; OAK_FEED_URL ga to'g'ridan-to'g'ri fayl manzilini bering)");
+  const all = []; const errs = [];
+  for (const l of wanted) { try { const r = await runOak(db, l, await download(l), 1); all.push(...r.items); } catch (e) { errs.push(`${l.split('/').pop()}: ${e.message}`); } }
+  if (!all.length) throw new Error(errs.join('; ') || 'fayllardan yozuv o‘qilmadi');
+  return { items: all };
+}
+
 async function runSource(db, key) {
   const url = sourceUrl(key);
   const bytes = await download(url);
   if (key === 'discontinued') {
-    if (!(bytes[0] === 0x50 && bytes[1] === 0x4b)) throw new Error("javob .xlsx emas (sayt bloklagan yoki manzil o'zgargan bo'lishi mumkin)");
+    if (!isXlsx(bytes)) throw new Error("javob .xlsx emas (sayt bloklagan yoki manzil o'zgargan bo'lishi mumkin)");
     const items = await parseDiscontinuedXlsx(bytes);
     // ISSN yoki to'liq (>=3 so'zli) nom bo'yicha; ISSN faqat ishonchli manbadan (SCImago) to'ldiriladi
     const stats = await applyFeed(db, items, 'scopus', { mode: 'delta', nameOnlyMinWords: 3, fillIssn: false });
     return `${items.length} ta chiqarilgan jurnal o'qildi — ${describe(stats)}`;
+  }
+  if (key === 'oak') {
+    const { items } = await runOak(db, url, bytes);
+    const stats = await applyFeed(db, items, 'oak', { mode: process.env.OAK_FEED_URL_FULL === '1' ? 'full' : 'delta' });
+    return `${items.length} ta yozuv o'qildi — ${describe(stats)}`;
   }
   const text = new TextDecoder().decode(bytes);
   if (looksHtml(text)) throw new Error("javob CSV emas, HTML sahifa (sayt avtomatik yuklashni bloklagan bo'lishi mumkin)");

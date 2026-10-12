@@ -131,3 +131,9 @@ ajratish), jurnallardagi o'zgarishlar tarixi.
 - Ilmiy ishlar ro'yxati (nusxalash, .txt, CSV) va dissertatsiya kirish matnini .txt sifatida yuklash.
 - Yorug'/qorong'i/avto mavzu almashtirgich, mobil menyu.
 - Admin: tahlil paneli (`/api/admin/analytics`) va jurnallar CSV eksporti (`/api/admin/export/journals.csv`).
+
+## OAK ro'yxatini avtomatik olish
+- Standart manba: `https://oak.uz/pages/31738`. Sahifadagi `.xlsx`/`.csv` havolalar o'zi topilib o'qiladi (OAK ro'yxati, "chiqarilgan" fayli o'tkazib yuboriladi).
+- `OAK_FEED_URL` — to'g'ridan-to'g'ri fayl yoki sahifa manzili; `off` — o'chirish.
+- Sayt bloklasa: `www`/non-`www` variant va `FEED_PROXY_URL` (masalan `https://relay.example/?u={url}`) orqali qayta uriniladi.
+- Har dushanba 03:00 UTC, Refresh bosilganda yoki admin → «Fid / import» da yuklanadi.
