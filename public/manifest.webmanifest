@@ -1,0 +1,11 @@
+{
+  "name": "Ilmiy yuksalish",
+  "short_name": "Ilmiy yuksalish",
+  "description": "Tadqiqotchilar uchun: jurnallar, OAK talablari, shaxsiy trayektoriya va AI ko'magi",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f6fb",
+  "theme_color": "#2f5bea",
+  "lang": "uz",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

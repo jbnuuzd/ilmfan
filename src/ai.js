@@ -187,4 +187,4 @@ async function extractJournals(rawText, hint) {
   return extractJson(text);
 }
 
-module.exports = { info, test, lastAiError, config, enabled, motivation, journalFits, summarizeChanges, planAdvice, extractJournals, ask, fallbackMotivation };
+module.exports = { extractJson, info, test, lastAiError, config, enabled, motivation, journalFits, summarizeChanges, planAdvice, extractJournals, ask, fallbackMotivation };

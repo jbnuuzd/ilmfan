@@ -9,6 +9,7 @@ const rec = require('./recommend');
 const feeds = require('./feeds');
 const planner = require('./planner');
 const { buildGuide } = require('./guide');
+const thesis = require('./thesis');
 const { knowledge } = require('./knowledge');
 
 class HttpError extends Error { constructor(status, message) { super(message); this.status = status; } }
@@ -166,6 +167,7 @@ function createHandler(db) {
       name: ctx.user.full_name, quote, motivation: m.text, aiEnabled: ai.enabled(),
       progress: uc.progress, daysLeft, currentMonth: curMonth?.label, thisMonth: curMonth?.tasks.map((t) => ({ ...t, done: uc.doneKeys.has(t.key) })) || [],
       next, alerts, requirements: requirementStatus(uc), profile: uc.profile, direction: uc.direction,
+      thesis: await (async () => { const ch = await db.prepare('SELECT pages_done, pages_target FROM thesis_chapters WHERE user_id=?').all(ctx.user.id); const intro = (await db.prepare('SELECT COUNT(*) c FROM thesis_intro WHERE user_id=? AND done=1').get(ctx.user.id)).c; return { written: ch.reduce((s, c) => s + c.pages_done, 0), target: ch.reduce((s, c) => s + c.pages_target, 0), introDone: intro, introTotal: thesis.INTRO_BANDS.filter((b) => !b.dscOnly || uc.profile.degree === 'dsc').length, started: ch.length > 0 }; })(),
       pubs: { byKind: ps.byKind, totalNeeded: ps.totalNeeded, publishedAll: ps.publishedAll, total: ps.pubs.length },
     };
   });
@@ -293,6 +295,152 @@ function createHandler(db) {
     if (cur.task_key) await db.prepare('UPDATE user_tasks SET done=0, done_at=NULL WHERE user_id=? AND task_key=?').run(ctx.user.id, cur.task_key);
     await db.prepare('DELETE FROM publications WHERE id=? AND user_id=?').run(id, ctx.user.id);
     return { ok: true };
+  });
+
+
+  // ---------- Dissertatsiya ustaxonasi ----------
+  const CH_STATUS = ['todo', 'writing', 'review', 'done'];
+  async function thesisContext(userId) {
+    const profile = await db.prepare('SELECT * FROM profiles WHERE user_id=?').get(userId);
+    if (!profile) return null;
+    const direction = await db.prepare('SELECT * FROM directions WHERE code=?').get(profile.direction_code);
+    return { profile, direction };
+  }
+
+  route('GET', '/api/thesis', 'user', async (req, body, ctx) => {
+    const tc = await thesisContext(ctx.user.id);
+    if (!tc) return { needProfile: true };
+    let chapters = await db.prepare('SELECT * FROM thesis_chapters WHERE user_id=? ORDER BY position, id').all(ctx.user.id);
+    if (!chapters.length) {
+      await db.batch(thesis.defaultChapters(tc.profile.degree).map(([title, pages], i) => ['INSERT INTO thesis_chapters(user_id,position,title,pages_target) VALUES(?,?,?,?)', ctx.user.id, i, title, pages]));
+      chapters = await db.prepare('SELECT * FROM thesis_chapters WHERE user_id=? ORDER BY position, id').all(ctx.user.id);
+    }
+    const saved = new Map((await db.prepare('SELECT key, text, done FROM thesis_intro WHERE user_id=?').all(ctx.user.id)).map((r) => [r.key, r]));
+    const bands = thesis.INTRO_BANDS.filter((b) => !b.dscOnly || tc.profile.degree === 'dsc')
+      .map((b) => ({ key: b.key, title: b.title, hint: b.hint, text: saved.get(b.key)?.text || '', done: !!saved.get(b.key)?.done }));
+    const ideasRow = await db.prepare('SELECT data, ai, created_at FROM thesis_ideas WHERE user_id=?').get(ctx.user.id);
+    const limit = Math.round(thesis.pageLimit(tc.profile.degree, tc.direction?.field_group));
+    const written = chapters.reduce((s, c) => s + c.pages_done, 0), target = chapters.reduce((s, c) => s + c.pages_target, 0);
+    return { chapters, bands, limit, written, target, ideas: ideasRow ? { items: JSON.parse(ideasRow.data), ai: !!ideasRow.ai, at: ideasRow.created_at } : null, aiEnabled: ai.enabled(), degree: tc.profile.degree, topic: tc.profile.topic };
+  });
+
+  function chapterInput(body) {
+    const title = String(body.title || '').trim().slice(0, 200);
+    if (title.length < 2) throw bad('Bob nomini kiriting');
+    const num = (v, name) => { const n = parseInt(v ?? 0, 10); if (Number.isNaN(n) || n < 0 || n > 400) throw bad(`${name} 0 dan 400 gacha bo'lsin`); return n; };
+    const status = CH_STATUS.includes(body.status) ? body.status : 'todo';
+    return { title, pages_target: num(body.pages_target, 'Reja varaq soni'), pages_done: num(body.pages_done, 'Yozilgan varaq soni'), status, note: String(body.note || '').trim().slice(0, 500) };
+  }
+
+  route('POST', '/api/thesis/chapters', 'user', async (req, body, ctx) => {
+    const c = chapterInput(body);
+    const pos = (await db.prepare('SELECT COALESCE(MAX(position),-1)+1 p FROM thesis_chapters WHERE user_id=?').get(ctx.user.id)).p;
+    const r = await db.prepare('INSERT INTO thesis_chapters(user_id,position,title,pages_target,pages_done,status,note) VALUES(?,?,?,?,?,?,?)').run(ctx.user.id, pos, c.title, c.pages_target, c.pages_done, c.status, c.note);
+    return { ok: true, id: r.lastInsertRowid };
+  });
+  route('PUT', '/api/thesis/chapters/(\\d+)', 'user', async (req, body, ctx) => {
+    const c = chapterInput(body);
+    const r = await db.prepare('UPDATE thesis_chapters SET title=?, pages_target=?, pages_done=?, status=?, note=? WHERE id=? AND user_id=?').run(c.title, c.pages_target, c.pages_done, c.status, c.note, Number(ctx.params[0]), ctx.user.id);
+    if (!r.changes) throw new HttpError(404, 'Topilmadi');
+    return { ok: true };
+  });
+  route('DELETE', '/api/thesis/chapters/(\\d+)', 'user', async (req, body, ctx) => {
+    await db.prepare('DELETE FROM thesis_chapters WHERE id=? AND user_id=?').run(Number(ctx.params[0]), ctx.user.id);
+    return { ok: true };
+  });
+
+  const bandOf = (key) => { const b = thesis.INTRO_BANDS.find((x) => x.key === key); if (!b) throw new HttpError(404, 'Band topilmadi'); return b; };
+  route('PUT', '/api/thesis/intro/(\\w+)', 'user', async (req, body, ctx) => {
+    const b = bandOf(ctx.params[0]);
+    const text = String(body.text || '').slice(0, 8000);
+    await db.prepare(`INSERT INTO thesis_intro(user_id,key,text,done,updated_at) VALUES(?,?,?,?,datetime('now')) ON CONFLICT(user_id,key) DO UPDATE SET text=excluded.text, done=excluded.done, updated_at=datetime('now')`).run(ctx.user.id, b.key, text, body.done ? 1 : 0);
+    return { ok: true };
+  });
+  route('POST', '/api/thesis/intro/(\\w+)/draft', 'user', async (req, body, ctx) => {
+    const b = bandOf(ctx.params[0]);
+    const tc = await thesisContext(ctx.user.id);
+    if (!tc) throw bad('Avval profilni to‘ldiring');
+    const info = { topic: tc.profile.topic, direction: tc.direction?.name };
+    if (!ai.enabled()) return { draft: thesis.templateDraft(b, info), ai: false };
+    const ctxRows = await db.prepare("SELECT key, text FROM thesis_intro WHERE user_id=? AND key IN ('maqsad','obyekt','predmet','vazifalar') AND text!=''").all(ctx.user.id);
+    const known = ctxRows.filter((r) => r.key !== b.key).map((r) => `${r.key}: ${r.text.slice(0, 500)}`).join('\n');
+    const text = await ai.ask("Siz ilmiy ishlar bo'yicha tajribali maslahatchisiz. Faqat o'zbek tilida (lotin), rasmiy ilmiy uslubda yozing. Raqam, statistika, qaror raqami, muallif va manbalarni TO'QIMANG — kerak joylarni [...] bilan belgilang.",
+      `Dissertatsiya mavzusi: ${info.topic}\nIxtisoslik: ${info.direction}\nDaraja: ${tc.profile.degree === 'dsc' ? 'DSc' : 'PhD'}\nKirish qismining bandi: «${b.title}»\nBandga ko'rsatma: ${b.hint}\n${known ? `Allaqachon yozilgan bandlar (izchillik uchun):\n${known}\n` : ''}\nShu band uchun 80–180 so'zlik QORALAMA yozing; foydalanuvchi uni tahrirlaydi.`, { maxTokens: 700, timeoutMs: 40000 });
+    if (!text) return { draft: thesis.templateDraft(b, info), ai: false, note: 'AI hozir javob bermadi — shablon berildi' };
+    return { draft: text, ai: true };
+  });
+
+  route('POST', '/api/thesis/ideas', 'user', async (req, body, ctx) => {
+    const tc = await thesisContext(ctx.user.id);
+    if (!tc) throw bad('Avval profilni to‘ldiring');
+    const [reqs, chapters] = await Promise.all([db.prepare('SELECT * FROM requirements WHERE degree=? ORDER BY id').all(tc.profile.degree), db.prepare('SELECT title FROM thesis_chapters WHERE user_id=? ORDER BY position, id').all(ctx.user.id)]);
+    let items = thesis.fallbackIdeas(tc.profile.topic, reqs, chapters), usedAi = false;
+    if (ai.enabled() && items.length) {
+      const plan = items.map((it, i) => `${i + 1}. tur=${it.kind}`).join('; ');
+      const text = await ai.ask("Siz ilmiy ishlar bo'yicha tajribali maslahatchisiz. Faqat o'zbek tilida javob bering. Javobni FAQAT JSON massiv sifatida qaytaring.",
+        `Dissertatsiya mavzusi: ${tc.profile.topic}\nIxtisoslik: ${tc.direction?.name}\nDissertatsiya boblari: ${chapters.map((c) => c.title).join(' | ')}\nKerakli ilmiy ishlar (tartib va tur): ${plan}\n` +
+        `Turlar: oak = OAK ro'yxatidagi milliy jurnal maqolasi; foreign = xorijiy Scopus/WoS maqolasi (sarlavhani ingliz tilida ham bering); conf_int = xalqaro konferensiya tezisi; conf_nat = respublika konferensiyasi tezisi.\n` +
+        `Har bir ish uchun mavzuga mos, bir-birini takrorlamaydigan, dissertatsiya boblaridan biriga tayangan g'oya bering. Format: [{"title":"...","kind":"oak|foreign|conf_int|conf_nat","chapter":"bob nomi","outline":"2-3 gaplik reja: muammo, usul, kutilayotgan natija"}]. Aniq natija/raqamlarni to'qimang.`, { maxTokens: 2500, timeoutMs: 60000 });
+      const arr = ai.extractJson(text);
+      if (Array.isArray(arr)) {
+        const ok = arr.filter((x) => x && typeof x.title === 'string' && x.title.length > 5).slice(0, items.length);
+        items = items.map((fb, i) => (ok[i] ? { title: ok[i].title.slice(0, 250), kind: fb.kind, chapter: String(ok[i].chapter || fb.chapter).slice(0, 150), outline: String(ok[i].outline || fb.outline).slice(0, 600) } : fb));
+        usedAi = ok.length > 0;
+      }
+    }
+    await db.prepare('INSERT OR REPLACE INTO thesis_ideas(user_id,data,ai) VALUES(?,?,?)').run(ctx.user.id, JSON.stringify(items), usedAi ? 1 : 0);
+    return { items, ai: usedAi };
+  });
+
+  route('POST', '/api/thesis/ideas/(\\d+)/publication', 'user', async (req, body, ctx) => {
+    const row = await db.prepare('SELECT data FROM thesis_ideas WHERE user_id=?').get(ctx.user.id);
+    const it = row && JSON.parse(row.data)[Number(ctx.params[0])];
+    if (!it) throw new HttpError(404, 'G‘oya topilmadi');
+    const r = await db.prepare("INSERT INTO publications(user_id,kind,title,status,note) VALUES(?,?,?,'draft',?)").run(ctx.user.id, it.kind, it.title, `${it.chapter ? it.chapter + '. ' : ''}${it.outline || ''}`.slice(0, 1000));
+    return { ok: true, id: r.lastInsertRowid };
+  });
+
+  // ---------- Reja vs haqiqat grafigi va kalendar ----------
+  const lastDay = (startMonth, i) => new Date(Date.UTC(Number(startMonth.slice(0, 4)), Number(startMonth.slice(5, 7)) - 1 + i + 1, 0)).toISOString().slice(0, 10);
+
+  route('GET', '/api/progress/timeline', 'user', async (req, body, ctx) => {
+    const uc = await userContext(ctx.user.id);
+    if (!uc.profile) return { needProfile: true };
+    const doneRows = await db.prepare('SELECT task_key, done_at FROM user_tasks WHERE user_id=? AND done=1').all(ctx.user.id);
+    const doneAt = new Map(doneRows.map((r) => [r.task_key, String(r.done_at || '').slice(0, 10)]));
+    const today = new Date().toISOString().slice(0, 10);
+    const cur = planner.currentIndex(uc.plan);
+    let plannedW = 0;
+    const points = uc.plan.months.map((m, i) => {
+      const end = lastDay(uc.plan.startMonth, i);
+      plannedW += m.tasks.reduce((s, t) => s + t.weight, 0);
+      const actualW = uc.plan.months.flatMap((mm) => mm.tasks).filter((t) => doneAt.has(t.key) && doneAt.get(t.key) <= end).reduce((s, t) => s + t.weight, 0);
+      return { label: m.label, planned: Math.round((100 * plannedW) / uc.plan.totalWeight), actual: i <= Math.max(cur, 0) || end <= today ? Math.round((100 * actualW) / uc.plan.totalWeight) : null };
+    });
+    return { points, current: Math.min(Math.max(cur, 0), points.length - 1), behind: cur >= 0 && cur < points.length ? points[cur].planned - (points[cur].actual ?? 0) : 0 };
+  });
+
+  const icsEsc = (s) => String(s).replace(/\\/g, '\\\\').replace(/;/g, '\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+  const fold = (line) => { const out = []; let rest = line; while (rest.length > 70) { out.push(rest.slice(0, 70)); rest = ' ' + rest.slice(70); } out.push(rest); return out.join('\r\n'); };
+
+  // Bajarilmagan vazifalar — oy oxiri muddati bilan iCalendar fayli (Google/Apple/Outlook kalendariga qo'shish uchun)
+  route('GET', '/api/plan.ics', 'user', async (req, body, ctx) => {
+    const uc = await userContext(ctx.user.id);
+    if (!uc.profile) throw bad('Avval profilni to‘ldiring');
+    const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
+    const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Ilmiy yuksalish//UZ//', 'CALSCALE:GREGORIAN', 'X-WR-CALNAME:Ilmiy yuksalish — trayektoriya'];
+    uc.plan.months.forEach((m, i) => {
+      const d = lastDay(uc.plan.startMonth, i).replace(/-/g, '');
+      const next = new Date(Date.UTC(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8) + 1)).toISOString().slice(0, 10).replace(/-/g, '');
+      for (const t of m.tasks) {
+        if (uc.doneKeys.has(t.key)) continue;
+        lines.push('BEGIN:VEVENT', `UID:${t.key}-u${ctx.user.id}@ilmiy-yuksalish`, `DTSTAMP:${stamp}`, `DTSTART;VALUE=DATE:${d}`, `DTEND;VALUE=DATE:${next}`,
+          fold(`SUMMARY:${icsEsc(`[${m.index}-oy muddati] ${t.title}`)}`), fold(`DESCRIPTION:${icsEsc(`Ilmiy yuksalish trayektoriyasi, ${m.label}. ${t.detail || ''}`)}`),
+          'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:Muddat yaqinlashmoqda', 'TRIGGER:-P5D', 'END:VALARM', 'END:VEVENT');
+      }
+    });
+    lines.push('END:VCALENDAR');
+    return { __raw: { body: lines.join('\r\n') + '\r\n', type: 'text/calendar; charset=utf-8', filename: 'ilmiy-yuksalish-trayektoriya.ics' } };
   });
 
   // ---------- Barcha jurnallarni qidirish (katalog) ----------
@@ -556,7 +704,13 @@ function createHandler(db) {
           if (!String(request.headers.get('content-type') || '').includes('application/json') && Number(request.headers.get('content-length') || 0) > 0) throw new HttpError(415, 'application/json kerak');
           body = await readBody(request);
         }
-        return json(200, await r.handler(request, body, ctx));
+        const out = await r.handler(request, body, ctx);
+        if (out && out.__raw) {
+          headers.set('content-type', out.__raw.type);
+          headers.set('content-disposition', `attachment; filename="${out.__raw.filename}"`);
+          return new Response(out.__raw.body, { status: 200, headers });
+        }
+        return json(200, out);
       }
       throw new HttpError(404, 'Topilmadi');
     } catch (e) {

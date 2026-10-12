@@ -80,7 +80,7 @@ function authView() {
 }
 
 // ---------------- Layout ----------------
-const USER_NAV = [['#/', 'Bosh sahifa'], ['#/profile', 'Profil'], ['#/plan', 'Trayektoriya'], ['#/publications', 'Nashrlarim'], ['#/documents', 'Hujjatlar'], ['#/oak', 'OAK ma’lumotnomasi'], ['#/j/scopus', 'Scopus'], ['#/j/oak', 'OAK'], ['#/j/impact', 'Impakt faktor'], ['#/j/impact_lite', "Arzon (Scopus'siz)"], ['#/j/conference', 'Konferensiyalar'], ['#/catalog', 'Katalog']];
+const USER_NAV = [['#/', 'Bosh sahifa'], ['#/profile', 'Profil'], ['#/plan', 'Trayektoriya'], ['#/thesis', 'Dissertatsiya'], ['#/publications', 'Nashrlarim'], ['#/documents', 'Hujjatlar'], ['#/oak', 'OAK ma’lumotnomasi'], ['#/j/scopus', 'Scopus'], ['#/j/oak', 'OAK'], ['#/j/impact', 'Impakt faktor'], ['#/j/impact_lite', "Arzon (Scopus'siz)"], ['#/j/conference', 'Konferensiyalar'], ['#/catalog', 'Katalog']];
 const ADMIN_NAV = [['#/admin', 'Statistika'], ['#/admin/users', 'Foydalanuvchilar'], ['#/admin/journals', 'Jurnallar'], ['#/admin/import', 'Fid / import'], ['#/admin/directions', "Yo'nalishlar"], ['#/admin/requirements', 'OAK talablari'], ['#/admin/doc_templates', 'Hujjat shablonlari'], ['#/admin/quotes', 'Iqtiboslar'], ['#/admin/changes', "O'zgarishlar"]];
 
 function layout(content) {
@@ -102,6 +102,7 @@ async function dashboardView() {
   const quote = d.quote ? h('div', { class: 'card hero' }, h('p', { class: 'q' }, `«${d.quote.text}»`), h('div', { class: 'by' }, `— ${d.quote.author}`, d.quote.note ? h('span', { class: 'small' }, `  (${d.quote.note})`) : null)) : null;
   if (d.needProfile) return h('div', {}, quote, h('div', { class: 'card' }, h('h2', {}, `Xush kelibsiz, ${d.name}!`), h('p', {}, "Shaxsiy trayektoriyangiz tuzilishi uchun avval tadqiqot yo'nalishingiz, mavzu va muddatni kiriting."), h('a', { class: 'btn primary', href: '#/profile' }, "Profilni to'ldirish")));
   const pct = d.progress.pct;
+  let tl = null; try { tl = await api('/progress/timeline'); } catch { /* grafik ixtiyoriy */ }
   return h('div', {}, quote,
     h('div', { class: 'card motiv' }, h('div', { class: 'small muted' }, d.aiEnabled ? "Sun'iy intellekt xabari" : 'Kundalik xabar'), h('p', { style: 'margin:6px 0 0' }, d.motivation)),
     d.alerts.map((a) => h('div', { class: `alert ${a.level}` }, a.text)),
@@ -110,6 +111,14 @@ async function dashboardView() {
         h('div', { class: 'muted small' }, `${d.progress.tasksDone}/${d.progress.tasksTotal} vazifa · rejadagi muddatgacha ${d.daysLeft > 0 ? d.daysLeft + ' kun' : 'muddat tugagan'}`),
         h('p', { class: 'small' }, `${d.direction.code} — ${d.direction.name}`), h('p', { class: 'small muted' }, `Mavzu: ${d.profile.topic}`)),
       h('div', { class: 'card' }, h('h3', {}, `Shu oy vazifalari (${d.currentMonth})`), d.thisMonth.length ? d.thisMonth.map((t) => taskRow(t)) : h('p', { class: 'muted' }, "Bu oyga vazifa rejalashtirilmagan."), h('a', { href: '#/plan' }, "To'liq trayektoriya →"))),
+    tl && !tl.needProfile ? h('div', { class: 'card' }, h('div', { class: 'jhead' }, h('h3', {}, 'Reja va haqiqat'),
+      h('span', { class: `pill ${tl.behind > 10 ? 'red' : tl.behind > 0 ? 'warn' : 'green'}` }, tl.behind > 0 ? `reja bo'yicha ${tl.behind}% orqada` : 'reja bo‘yicha o‘z vaqtida')), lineChart(tl.points, tl.current),
+      h('div', { class: 'small muted' }, "Uzluksiz chiziq — sizning bajarilishingiz, punktir — reja (har oy oxiriga qadar bajarilishi kerak bo'lgan ulush).")) : null,
+    d.thesis ? h('div', { class: 'card' }, h('div', { class: 'jhead' }, h('h3', {}, 'Dissertatsiya matni'), h('a', { href: '#/thesis' }, 'Ustaxonaga →')),
+      d.thesis.started ? h('div', { class: 'grid g2' },
+        h('div', {}, h('div', { class: 'small' }, `Yozilgan: ${d.thesis.written} / ${d.thesis.target} varaq`), h('div', { class: 'progress', style: 'margin:6px 0' }, h('i', { style: `width:${d.thesis.target ? Math.min(100, Math.round(100 * d.thesis.written / d.thesis.target)) : 0}%` }))),
+        h('div', {}, h('div', { class: 'small' }, `Kirish bandlari: ${d.thesis.introDone} / ${d.thesis.introTotal}`), h('div', { class: 'progress', style: 'margin:6px 0' }, h('i', { style: `width:${Math.round(100 * d.thesis.introDone / d.thesis.introTotal)}%` }))))
+        : h('p', { class: 'muted', style: 'margin:6px 0 0' }, "Boblar rejasi, kirish bandlari uchun AI qoralama va maqola g'oyalari — «Dissertatsiya» bo'limida.")) : null,
     h('div', { class: 'card' }, h('div', { class: 'jhead' }, h('h3', {}, `Chop etilgan ishlar: ${d.pubs.publishedAll} / ${d.pubs.totalNeeded}`), h('a', { href: '#/publications' }, d.pubs.total ? 'Nashrlarim →' : '+ Birinchi nashrni qo‘shish →')),
       h('div', { class: 'grid g3' }, d.pubs.byKind.map((k) => h('div', {}, h('div', { class: 'small' }, PUB_KIND[k.kind] || k.title), h('div', { class: 'progress', style: 'margin:6px 0' }, h('i', { style: `width:${Math.min(100, Math.round(100 * k.published / k.min))}%` })), h('div', { class: 'small muted' }, `${k.published}/${k.min} chop etilgan${k.inProgress ? ` · ${k.inProgress} ta jarayonda` : ''}`))))),
     h('div', { class: 'card' }, h('h3', {}, 'Dissertatsiya himoyasi uchun minimal talablar'), reqTable(d.requirements)));
@@ -163,7 +172,7 @@ async function planView() {
   const bar = h('div', { class: 'progress' }, h('i', { style: `width:${d.progress.pct}%` }));
   const pctEl = h('span', { class: 'big' }, `${d.progress.pct}%`);
   const refreshProgress = async () => { const x = await api('/plan'); pctEl.textContent = `${x.progress.pct}%`; bar.firstChild.style.width = `${x.progress.pct}%`; };
-  return h('div', {}, h('div', { class: 'jhead' }, h('h1', {}, `Shaxsiy trayektoriya — ${d.profile.months} oy`), h('button', { class: 'noprint', onclick: () => window.print() }, '🖨 Chop etish / PDF')),
+  return h('div', {}, h('div', { class: 'jhead' }, h('h1', {}, `Shaxsiy trayektoriya — ${d.profile.months} oy`), h('div', { class: 'noprint', style: 'display:flex;gap:8px' }, h('a', { class: 'btn', href: '/api/plan.ics', download: 'ilmiy-yuksalish-trayektoriya.ics', title: 'Bajarilmagan vazifalarni kalendarga qo‘shish' }, '📅 Kalendarga (.ics)'), h('button', { onclick: () => window.print() }, '🖨 Chop etish / PDF'))),
     h('div', { class: 'card' }, pctEl, h('span', { class: 'muted' }, ' bajarilgan'), h('div', { style: 'margin-top:10px' }, bar)),
     d.warnings.map((w) => h('div', { class: 'alert amber' }, w)),
     d.advice ? h('div', { class: 'card motiv' }, h('div', { class: 'small muted' }, "Sun'iy intellekt maslahati"), h('div', { style: 'white-space:pre-wrap' }, d.advice)) : null,
@@ -192,6 +201,109 @@ async function documentsView() {
       })) : null;
     }),
     h('h2', {}, 'Nashr talablari'), h('div', { class: 'card' }, reqTable(d.requirements)));
+}
+
+// ---------------- Grafik (reja vs haqiqat) ----------------
+function lineChart(points, current) {
+  const W = 640, H = 220, L = 38, R = 14, T = 14, B = 34, n = points.length;
+  const x = (i) => L + (n === 1 ? (W - L - R) / 2 : (i * (W - L - R)) / (n - 1)), y = (v) => T + (1 - v / 100) * (H - T - B);
+  const path = (key) => { let d = '', pen = false; points.forEach((p, i) => { if (p[key] == null) { pen = false; return; } d += `${pen ? 'L' : 'M'}${x(i).toFixed(1)},${y(p[key]).toFixed(1)} `; pen = true; }); return d; };
+  const NS = 'http://www.w3.org/2000/svg';
+  const el = (tag, attrs, ...kids) => { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs || {})) e.setAttribute(k, v); kids.forEach((k) => e.append(k.nodeType ? k : document.createTextNode(String(k)))); return e; };
+  const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Reja va haqiqiy bajarilish grafigi', style: 'width:100%;height:auto;max-height:260px' });
+  [0, 25, 50, 75, 100].forEach((v) => { svg.append(el('line', { x1: L, x2: W - R, y1: y(v), y2: y(v), style: 'stroke:var(--line)', 'stroke-width': 1 }), el('text', { x: L - 6, y: y(v) + 4, 'text-anchor': 'end', style: 'fill:var(--muted)', 'font-size': 11 }, `${v}%`)); });
+  const step = Math.max(1, Math.ceil(n / 8));
+  points.forEach((p, i) => { if (i % step === 0 || i === n - 1) svg.append(el('text', { x: x(i), y: H - 12, 'text-anchor': 'middle', style: 'fill:var(--muted)', 'font-size': 10 }, p.label.replace(/ \d{4}$/, ''))); });
+  svg.append(el('line', { x1: x(current), x2: x(current), y1: T, y2: H - B, style: 'stroke:var(--muted)', 'stroke-dasharray': '2 4', 'stroke-width': 1 }));
+  svg.append(el('path', { d: path('planned'), fill: 'none', style: 'stroke:var(--muted)', 'stroke-width': 2, 'stroke-dasharray': '6 5' }));
+  svg.append(el('path', { d: path('actual'), fill: 'none', style: 'stroke:var(--brand)', 'stroke-width': 3, 'stroke-linejoin': 'round' }));
+  points.forEach((p, i) => { if (p.actual != null) svg.append(el('circle', { cx: x(i), cy: y(p.actual), r: 4, style: 'fill:var(--brand)' }, el('title', {}, `${p.label}: haqiqiy ${p.actual}%, reja ${p.planned}%`))); });
+  return svg;
+}
+
+// ---------------- Dissertatsiya ustaxonasi ----------------
+const CH_STATUS = { todo: 'Boshlanmagan', writing: 'Yozilmoqda', review: 'Ko‘rib chiqishda', done: 'Tayyor' };
+const CH_PILL = { todo: '', writing: 'warn', review: '', done: 'green' };
+
+async function thesisView() {
+  const d = await api('/thesis');
+  if (d.needProfile) return needProfile();
+  let tab = sessionStorage.getItem('thesisTab') || 'chapters';
+  const body = h('div', {});
+  const draw = () => {
+    sessionStorage.setItem('thesisTab', tab);
+    fill(body, h('div', { class: 'tabs seg noprint' }, [['chapters', 'Boblar'], ['intro', 'Kirish bandlari'], ['ideas', "Maqola g'oyalari"]].map(([k, t]) => h('button', { class: tab === k ? 'on' : '', onclick: () => { tab = k; draw(); } }, t))),
+      tab === 'chapters' ? chaptersTab(d, () => render()) : tab === 'intro' ? introTab(d) : ideasTab(d));
+  };
+  draw();
+  return h('div', {}, h('h1', {}, 'Dissertatsiya ustaxonasi'), h('p', { class: 'muted' }, `Mavzu: ${d.topic}`), body);
+}
+
+function chaptersTab(d, reload) {
+  const over = d.target > d.limit;
+  const edit = (c) => {
+    const isNew = !c;
+    const f = { title: h('input', { value: c?.title || '' }), target: h('input', { type: 'number', min: 0, value: c?.pages_target ?? 10 }), done: h('input', { type: 'number', min: 0, value: c?.pages_done ?? 0 }),
+      status: h('select', {}, Object.entries(CH_STATUS).map(([k, v]) => h('option', { value: k, selected: (c?.status || 'todo') === k }, v))), note: h('textarea', {}, c?.note || '') };
+    const err = h('div', { class: 'err' });
+    const modal = h('div', { class: 'modal', onclick: (e) => { if (e.target === modal) modal.remove(); } }, h('div', { class: 'card', style: 'max-width:520px' }, h('h2', { style: 'margin-top:0' }, isNew ? 'Yangi bob' : 'Bobni tahrirlash'),
+      h('label', {}, 'Nomi'), f.title, h('div', { class: 'row2' }, h('div', {}, h('label', {}, 'Reja (varaq)'), f.target), h('div', {}, h('label', {}, 'Yozilgan (varaq)'), f.done)), h('label', {}, 'Holati'), f.status, h('label', {}, 'Izoh'), f.note, err,
+      h('div', { style: 'display:flex;gap:8px;margin-top:14px' }, h('button', { class: 'primary', onclick: async () => {
+        const body = { title: f.title.value, pages_target: f.target.value, pages_done: f.done.value, status: f.status.value, note: f.note.value };
+        try { await api(isNew ? '/thesis/chapters' : `/thesis/chapters/${c.id}`, { method: isNew ? 'POST' : 'PUT', body }); modal.remove(); reload(); } catch (x) { err.textContent = x.message; }
+      } }, 'Saqlash'), h('button', { onclick: () => modal.remove() }, 'Bekor qilish'),
+      isNew ? null : h('button', { class: 'danger', style: 'margin-left:auto', onclick: async () => { if (confirm("Bob o'chirilsinmi?")) { await api(`/thesis/chapters/${c.id}`, { method: 'DELETE', body: {} }); modal.remove(); reload(); } } }, "O'chirish"))));
+    document.body.append(modal);
+  };
+  return h('div', {},
+    h('div', { class: 'card' }, h('div', { class: 'jhead' }, h('div', {}, h('div', { class: 'big' }, `${d.written}`, h('span', { class: 'muted', style: 'font-size:18px' }, ` / ${d.target} varaq`)), h('div', { class: 'small muted' }, `OAK chegarasi: ${d.limit} varaqdan oshmasin (adabiyotlar va ilovalar kirmaydi)`)), h('button', { class: 'primary', onclick: () => edit(null) }, '+ Bob qo‘shish')),
+      h('div', { class: 'progress', style: 'margin-top:10px' }, h('i', { style: `width:${d.target ? Math.min(100, Math.round(100 * d.written / d.target)) : 0}%` })),
+      over ? h('div', { class: 'alert amber', style: 'margin-top:10px' }, `Boblar rejasi (${d.target} varaq) OAK chegarasidan (${d.limit}) oshib ketgan — qisqartiring.`) : null),
+    h('div', { class: 'card tablewrap' }, h('table', {}, h('tr', {}, ['Bob', 'Holati', 'Varaq', ''].map((x) => h('th', {}, x))),
+      d.chapters.map((c) => h('tr', {}, h('td', {}, c.title, c.note ? h('div', { class: 'small muted' }, c.note) : null), h('td', {}, h('span', { class: `pill ${CH_PILL[c.status]}` }, CH_STATUS[c.status])),
+        h('td', {}, `${c.pages_done} / ${c.pages_target}`, h('div', { class: 'progress', style: 'height:6px;margin-top:4px;width:90px' }, h('i', { style: `width:${c.pages_target ? Math.min(100, Math.round(100 * c.pages_done / c.pages_target)) : 0}%` }))), h('td', {}, h('button', { onclick: () => edit(c) }, 'Tahrirlash')))))),
+    h('p', { class: 'small muted' }, "Boblar nomlari va varaqlar soni namuna: o'z ishingizga moslab tahrirlang. Varaq hisobi — ikki tomonli varaq (OAK nizomi)."));
+}
+
+function introTab(d) {
+  const doneCount = () => d.bands.filter((b) => b.done).length;
+  const counter = h('div', { class: 'small muted' });
+  const upd = () => { counter.textContent = `${doneCount()} / ${d.bands.length} band tayyor`; };
+  upd();
+  return h('div', {}, h('p', { class: 'muted' }, "OAK nizomiga ko'ra kirish qismida quyidagi bandlar bo'lishi shart. Har bir band uchun ko'rsatma bor; «Qoralama olish» tugmasi AI yordamida (ulangan bo'lsa) yoki shablon bilan boshlang'ich matn beradi — uni o'zingiz tahrirlang."), counter,
+    d.bands.map((b) => {
+      const ta = h('textarea', { style: 'min-height:130px', placeholder: b.hint }, b.text);
+      const cb = h('input', { type: 'checkbox', checked: b.done, style: 'width:auto' });
+      const state = h('span', { class: 'small muted' });
+      const save = async () => { try { await api(`/thesis/intro/${b.key}`, { method: 'PUT', body: { text: ta.value, done: cb.checked } }); b.text = ta.value; b.done = cb.checked; state.textContent = 'saqlandi ✓'; upd(); sum.querySelector('.pill').className = `pill ${b.done ? 'green' : ''}`; sum.querySelector('.pill').textContent = b.done ? 'tayyor' : b.text ? 'qoralama' : 'bo‘sh'; } catch (x) { state.textContent = x.message; } };
+      const draftBtn = h('button', { onclick: async (e) => {
+        if (ta.value.trim() && !confirm('Mavjud matn qoralama bilan almashtirilsinmi?')) return;
+        e.target.disabled = true; e.target.textContent = 'Tayyorlanmoqda…';
+        try { const r = await api(`/thesis/intro/${b.key}/draft`, { method: 'POST', body: {} }); ta.value = r.draft; state.textContent = r.ai ? '🤖 AI qoralamasi — tahrirlab, so‘ng saqlang' : (r.note || 'Shablon — tahrirlab saqlang'); } catch (x) { state.textContent = x.message; }
+        e.target.disabled = false; e.target.textContent = '✨ Qoralama olish';
+      } }, '✨ Qoralama olish');
+      const sum = h('summary', { style: 'cursor:pointer;font-weight:600;padding:8px 0' }, b.title, ' ', h('span', { class: `pill ${b.done ? 'green' : ''}` }, b.done ? 'tayyor' : b.text ? 'qoralama' : 'bo‘sh'));
+      return h('details', { class: 'card', style: 'padding:6px 16px' }, sum, h('div', { class: 'small muted', style: 'margin-bottom:8px' }, b.hint), ta,
+        h('div', { style: 'display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0 10px' }, draftBtn, h('button', { class: 'primary', onclick: save }, 'Saqlash'), h('label', { style: 'margin:0;font-weight:400;display:flex;gap:6px;align-items:center' }, cb, 'Band tayyor'), state));
+    }));
+}
+
+function ideasTab(d) {
+  const box = h('div', {});
+  const show = (ideas) => {
+    fill(box, !ideas ? h('div', { class: 'card muted' }, "Hali g'oya yaratilmagan. Tugmani bosing: OAK talab qilgan ishlar soniga (PhD uchun 7 ta) mos, dissertatsiya boblariga tayangan maqola va tezis mavzulari taklif qilinadi.") : [
+      h('p', { class: 'small muted' }, ideas.ai ? "🤖 AI tomonidan mavzuingiz va boblaringiz asosida tuzildi." : "Shablon asosida tuzildi (AI ulanmagan yoki javob bermadi). Sarlavhalarni o'z mavzuingizga moslab tahrirlang."),
+      ideas.items.map((it, i) => h('div', { class: 'card' }, h('div', { class: 'jhead' }, h('div', {}, h('span', { class: 'pill' }, PUB_KIND[it.kind] || it.kind), it.chapter ? h('span', { class: 'small muted' }, ` ${it.chapter}`) : null, h('h3', { style: 'margin-top:6px' }, it.title)),
+        h('button', { onclick: async (e) => { e.target.disabled = true; try { await api(`/thesis/ideas/${i}/publication`, { method: 'POST', body: {} }); e.target.textContent = '✓ Nashrlarimga qo‘shildi'; } catch (x) { toast(x.message); e.target.disabled = false; } } }, '+ Nashrlarimga qo‘shish')),
+        h('div', { class: 'small' }, it.outline)))]);
+  };
+  show(d.ideas);
+  return h('div', {}, h('button', { class: 'primary', style: 'margin-bottom:12px', onclick: async (e) => {
+    if (d.ideas && !confirm('Oldingi g‘oyalar yangilari bilan almashtirilsinmi?')) return;
+    e.target.disabled = true; e.target.textContent = 'G‘oyalar tayyorlanmoqda…';
+    try { const r = await api('/thesis/ideas', { method: 'POST', body: {} }); d.ideas = r; show(r); } catch (x) { toast(x.message); }
+    e.target.disabled = false; e.target.textContent = d.ideas ? '🔄 Qayta yaratish' : '💡 G‘oyalarni yaratish';
+  } }, d.ideas ? '🔄 Qayta yaratish' : '💡 G‘oyalarni yaratish'), box);
 }
 
 // ---------------- Parol ----------------
@@ -346,6 +458,28 @@ function jcard(j, category, aiOn) {
     h('div', { class: 'small', style: 'color:var(--brand);font-weight:600' }, 'Batafsil: tayyorlash tavsiyalari va yuborish bosqichlari ▸'));
 }
 
+// ---------------- Jurnal ishonchlilik tekshiruvi (Think. Check. Submit.) ----------------
+const TRUST = [
+  "Tahririyat manzili va aloqa ma'lumotlari ochiq va haqiqiy (korporativ elektron pochta, aniq manzil)",
+  "ISSN raqami rasmiy ISSN portalida (portal.issn.org) shu jurnal nomi bilan tasdiqlanadi",
+  "Jurnal Scopus (Sources), Web of Science Master Journal List yoki DOAJ'da topiladi",
+  "Taqrizlash jarayoni va muddatlari aniq yozilgan; «bir necha kunda chop etamiz» kabi va'dalar yo'q",
+  "Nashr to'lovlari (APC) saytda ochiq ko'rsatilgan, yashirin to'lov yo'q",
+  "Tahrir hay'ati a'zolari haqiqiy olimlar va ularning shaxsiy sahifalarida shu jurnal ko'rsatilgan",
+  "Sayt soxta ko'rsatkichlar (SJIF, Global/International Impact Factor va h.k.) bilan maqtanmaydi",
+  "Maqolalar muntazam chiqadi, arxiv ochiq, DOI havolalari ishlaydi",
+  "Mavzu doirasi (Aims & Scope) aniq va sizning ishingizga mos",
+  "Jurnalga o'zingiz izlab topdingiz (spam xat orqali taklif qilinmagan)",
+];
+function trustChecklist() {
+  const out = h('div', { class: 'alert blue', style: 'margin-top:8px' });
+  const boxes = TRUST.map(() => h('input', { type: 'checkbox', style: 'width:auto' }));
+  const calc = () => { const n = boxes.filter((b) => b.checked).length; out.className = `alert ${n >= 8 ? 'green' : n >= 5 ? 'amber' : 'red'}`; out.textContent = `Ishonchlilik: ${n}/${TRUST.length} — ${n >= 8 ? 'yaxshi, yuborish mumkin' : n >= 5 ? 'ehtiyot bo‘ling: yetishmayotgan bandlarni aniqlang' : 'yuborishdan saqlaning: ishonchsiz nashr bo‘lishi mumkin'}`; };
+  boxes.forEach((b) => b.addEventListener('change', calc)); calc();
+  return h('div', {}, h('h3', { style: 'margin-top:20px' }, '4. Jurnalni yuborishdan oldin ishonchlilik tekshiruvi'),
+    h('p', { class: 'small muted' }, "Har bir bandni jurnal saytida tekshirib belgilang (Think. Check. Submit. tamoyillari asosida)."), TRUST.map((t, i) => h('label', { style: 'font-weight:400;display:flex;gap:8px;margin:6px 0' }, boxes[i], t)), out);
+}
+
 // ---------------- Jurnal batafsil oynasi ----------------
 async function openJournal(j, category) {
   const modal = h('div', { class: 'modal', onclick: (e) => { if (e.target === modal) close(); } });
@@ -375,6 +509,7 @@ async function openJournal(j, category) {
       h('h3', { style: 'margin-top:20px' }, '3. Maqolani jurnalga yuborish bosqichlari'),
       h('p', { class: 'small muted' }, `Yuborish tizimi: ${g.system}`),
       h('ol', { class: 'stepper' }, g.steps.map((s) => h('li', {}, h('div', { class: 'jhead' }, h('b', {}, s.title), h('span', { class: 'pill' }, s.duration)), h('div', { class: 'small' }, s.detail)))),
+      trustChecklist(),
       h('p', { class: 'small muted' }, "Umumiy amaliyot asosida tuzilgan yo'riqnoma. Jurnalning rasmiy «Guide for Authors» hujjati har doim ustuvor."),
       h('div', { style: 'text-align:right' }, h('button', { onclick: close }, 'Yopish'))));
   } catch (e) { fill(modal, h('div', { class: 'card detail' }, h('div', { class: 'alert red' }, e.message), h('button', { onclick: close }, 'Yopish'))); }
@@ -486,6 +621,7 @@ async function render() {
     else if (hash === '#/documents') view = await documentsView();
     else if (hash === '#/oak') view = await oakView();
     else if (hash === '#/publications') view = await publicationsView();
+    else if (hash === '#/thesis') view = await thesisView();
     else if (hash === '#/catalog') view = await catalogView();
     else if (/^#\/j\/(scopus|oak|impact|impact_lite|conference)$/.test(hash)) view = await journalsView(hash.split('/')[2]);
     else view = await dashboardView();

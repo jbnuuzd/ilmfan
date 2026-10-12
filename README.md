@@ -83,6 +83,12 @@ oldinga, uzoq ko'rib chiqiladigan Scopus maqolalari o'rtaga, qo'llanma/monografi
 **Scopus / OAK / Impakt faktor / Konferensiyalar** — har biri Bepul va Pullik, har bir yo'nalish uchun 10 tagacha tavsiya:
 kvartil, boshlangan yil, rasmiy sayt, indekslanganlik isboti havolasi, AI moslik tahlili.
 
+**Dissertatsiya ustaxonasi:** (1) *Boblar* — bob-bob rejasi va yozilgan varaqlar hisobi, OAK chegarasi bilan solishtirish (PhD 60, DSc 100 varaq; ijtimoiy-gumanitarda +30%); (2) *Kirish bandlari* — OAK nizomidagi barcha majburiy bandlar (dolzarblik, maqsad, vazifalar, obyekt, predmet, ilmiy yangilik, aprobatsiya…) uchun ko'rsatma, matn maydoni va «✨ Qoralama olish» (AI ulangan bo'lsa mavzuga moslashtirilgan qoralama, aks holda shablon; raqam va manbalar to'qilmaydi); (3) *Maqola g'oyalari* — OAK talab qilgan ishlar soniga (PhD: 7 ta) mos, boblarga tayangan maqola/tezis mavzulari, bir bosishda «Nashrlarim»ga qo'shiladi.
+
+**Reja va haqiqat grafigi** (bosh sahifa): har oy oxirigacha bajarilishi kerak bo'lgan ulush bilan haqiqiy bajarilish taqqoslanadi. **Kalendarga eksport:** Trayektoriya → «📅 Kalendarga (.ics)» — bajarilmagan vazifalar oy oxiri muddati va 5 kunlik eslatma bilan Google/Apple/Outlook kalendariga qo'shiladi. Sayt telefonga «ilova» sifatida o'rnatiladi (PWA manifest).
+
+**Jurnal ishonchlilik tekshiruvi:** jurnal oynasidagi 10 bandli ro'yxat (Think. Check. Submit. tamoyillari: ISSN, indekslanish, APC ochiqligi, tahrir hay'ati, soxta ko'rsatkichlar…) xavf darajasini ko'rsatadi.
+
 **Nashrlarim:** tadqiqotchi o'z maqola va tezislarini kiritib, holatini kuzatadi (tayyorlanmoqda → yuborildi → ko'rib chiqilmoqda → revision → qabul → chop etildi / rad etildi), jurnalni katalogdan tanlaydi, DOI/havola va hammualliflarni saqlaydi. OAK minimal talablari bo'yicha **real** hisob ko'rsatiladi (masalan, «Chop etilgan ishlar: 3 / 7»); «Chop etildi» holatida trayektoriyadagi mos vazifa avtomatik belgilanadi (holat qaytarilsa yoki nashr o'chirilsa — belgi olinadi). Jurnalning odatdagi muddatidan 1,5 baravar uzoq kutilayotgan maqolalar uchun bosh sahifada eslatma chiqadi.
 
 **Katalog:** barcha jurnallar bo'yicha qidiruv (nom, nashriyot, mavzu, ISSN) va filtrlar (Scopus / OAK / impakt / arzon / konferensiya, bepul-pullik, kvartil); jurnal ustiga bosilsa batafsil oyna ochiladi.

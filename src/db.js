@@ -146,6 +146,31 @@ CREATE TABLE IF NOT EXISTS publications (
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS publications_user_idx ON publications(user_id);
+CREATE TABLE IF NOT EXISTS thesis_chapters (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL DEFAULT 0,
+  title TEXT NOT NULL,
+  pages_target INTEGER NOT NULL DEFAULT 0,
+  pages_done INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'todo',          -- todo | writing | review | done
+  note TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS thesis_chapters_idx ON thesis_chapters(user_id);
+CREATE TABLE IF NOT EXISTS thesis_intro (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  key TEXT NOT NULL,
+  text TEXT NOT NULL DEFAULT '',
+  done INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, key)
+);
+CREATE TABLE IF NOT EXISTS thesis_ideas (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  data TEXT NOT NULL,
+  ai INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 CREATE TABLE IF NOT EXISTS journal_advice (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   journal_id INTEGER NOT NULL REFERENCES journals(id) ON DELETE CASCADE,
